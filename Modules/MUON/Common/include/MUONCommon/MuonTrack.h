@@ -14,13 +14,16 @@
 
 #include <CommonDataFormat/InteractionRecord.h>
 #include <DataFormatsGlobalTracking/RecoContainer.h>
+#include <DataFormatsITSMFT/ROFRecord.h>
 #include <DataFormatsMCH/TrackMCH.h>
 #include <DataFormatsMCH/ROFRecord.h>
 #include <DataFormatsMID/Track.h>
+#include <DataFormatsMID/ROFRecord.h>
 #include <ReconstructionDataFormats/TrackMCHMID.h>
 #include <ReconstructionDataFormats/GlobalFwdTrack.h>
 #include <CommonDataFormat/TimeStamp.h>
 #include <MCHTracking/TrackParam.h>
+#include "MFTTracking/Constants.h"
 #include <Math/Vector4D.h>
 #include <memory>
 
@@ -34,11 +37,13 @@ class MuonTrack
 
  public:
   MuonTrack() = default;
-  MuonTrack(const o2::mch::TrackMCH* track, int trackID, const o2::globaltracking::RecoContainer& recoCont, uint32_t firstTForbit);
-  MuonTrack(const o2::dataformats::TrackMCHMID* track, const o2::globaltracking::RecoContainer& recoCont, uint32_t firstTForbit);
-  MuonTrack(const o2::dataformats::GlobalFwdTrack* track, const o2::globaltracking::RecoContainer& recoCont, uint32_t firstTForbit);
+  MuonTrack(const o2::mch::TrackMCH* track, int trackID, const o2::globaltracking::RecoContainer& recoCont, uint32_t firstTForbit, double BzMFT);
+  MuonTrack(const o2::dataformats::TrackMCHMID* track, const o2::globaltracking::RecoContainer& recoCont, uint32_t firstTForbit, double BzMFT);
+  MuonTrack(const o2::dataformats::GlobalFwdTrack* track, const o2::globaltracking::RecoContainer& recoCont, uint32_t firstTForbit, double BzMFT);
 
   void init();
+
+  void setBzMFT(double Bz) { mBzMFT = Bz; }
 
   ROOT::Math::PxPyPzMVector getMuonMomentum() const { return mMuonMomentum; }
   ROOT::Math::PxPyPzMVector getMuonMomentumAtVertex() const { return mMuonMomentumAtVertex; }
@@ -62,12 +67,27 @@ class MuonTrack
   double getChi2OverNDFMCH() const { return mChi2OverNDFMCH; }
   double getChi2OverNDFMID() const { return mChi2OverNDFMID; }
 
-  /// get the track x position
+  /// get the MCH track position at the MID
   double getXMid() const { return mTrackParametersAtMID.getNonBendingCoor(); }
-  /// get the track y position
   double getYMid() const { return mTrackParametersAtMID.getBendingCoor(); }
-  /// get the track z position where the parameters are evaluated
   double getZMid() const { return mTrackParametersAtMID.getZ(); }
+
+  /// get the MCH track position at the absorber end
+  double getXAbs() const { return mTrackXAbsMCH; }
+  double getYAbs() const { return mTrackYAbsMCH; }
+  double getZAbs() const { return mTrackZAbsMCH; }
+
+  /// get the MCH track position at the matching plane
+  double getXMatchMCH() const { return mTrackXMatchMCH; }
+  double getYMatchMCH() const { return mTrackYMatchMCH; }
+  double getZMatchMCH() const { return mTrackZMatchMCH; }
+  double getSigmaXMatchMCH() const { return mTrackSigmaXMatchMCH; }
+  double getSigmaYMatchMCH() const { return mTrackSigmaYMatchMCH; }
+
+  /// get the MFT track position at the matching plane
+  double getXMatchMFT() const { return mTrackXMatchMFT; }
+  double getYMatchMFT() const { return mTrackYMatchMFT; }
+  double getZMatchMFT() const { return mTrackZMatchMFT; }
 
   const o2::dataformats::MatchInfoFwd& getMatchInfoFwd() const { return mMatchInfoFwd; }
 
@@ -85,8 +105,12 @@ class MuonTrack
   Time getTimeMCH() const { return mTimeMCH; }
   Time getTimeMID() const { return mTimeMID; }
 
+  /// get the ROF associated to the MFT track
+  o2::itsmft::ROFRecord getRofMFT() const { return mRofMFT; }
   /// get the ROF associated to the MCH track
   o2::mch::ROFRecord getRofMCH() const { return mRofMCH; }
+  /// get the ROF associated to the MCH track
+  o2::mid::ROFRecord getRofMID() const { return mRofMID; }
 
   Time getRofTimeMCH() const { return mRofTimeMCH; }
 
@@ -124,6 +148,8 @@ class MuonTrack
   static constexpr double sAbsZBeg = -90.;  ///< Position of the begining of the absorber (cm)
   static constexpr double sAbsZEnd = -505.; ///< Position of the end of the absorber (cm)
 
+  static constexpr double sLastMFTPlaneZ = o2::mft::constants::mft::LayerZCoordinate()[9];
+
  private:
   o2::dataformats::MatchInfoFwd mMatchInfoFwd;
 
@@ -137,6 +163,23 @@ class MuonTrack
   ROOT::Math::PxPyPzMVector mMuonMomentumAtVertex;
   ROOT::Math::PxPyPzMVector mMuonMomentumMCH;
   ROOT::Math::PxPyPzMVector mMuonMomentumAtVertexMCH;
+
+  double mBzMFT{ 0 };
+
+  double mTrackXAbsMCH{ 0 };
+  double mTrackYAbsMCH{ 0 };
+  double mTrackZAbsMCH{ 0 };
+
+  double mTrackXMatchMCH{ 0 };
+  double mTrackYMatchMCH{ 0 };
+  double mTrackZMatchMCH{ 0 };
+
+  double mTrackSigmaXMatchMCH{ 0 };
+  double mTrackSigmaYMatchMCH{ 0 };
+
+  double mTrackXMatchMFT{ 0 };
+  double mTrackYMatchMFT{ 0 };
+  double mTrackZMatchMFT{ 0 };
 
   float mDCA{ 0 };
   float mDCAMCH{ 0 };
@@ -156,7 +199,9 @@ class MuonTrack
   Time mTimeMCH;
   Time mTimeMID;
 
+  o2::itsmft::ROFRecord mRofMFT{};
   o2::mch::ROFRecord mRofMCH{};
+  o2::mid::ROFRecord mRofMID{};
 
   Time mRofTimeMCH;
 

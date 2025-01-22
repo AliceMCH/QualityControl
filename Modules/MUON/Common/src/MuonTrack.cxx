@@ -12,12 +12,12 @@
 #include "MUONCommon/MuonTrack.h"
 #include "QualityControl/QcInfoLogger.h"
 
-#include <DataFormatsITSMFT/ROFRecord.h>
+//#include <DataFormatsITSMFT/ROFRecord.h>
 #include <DataFormatsMCH/Cluster.h>
-#include <DataFormatsMCH/ROFRecord.h>
+//#include <DataFormatsMCH/ROFRecord.h>
 #include <DataFormatsMFT/TrackMFT.h>
 #include <DataFormatsMCH/TrackMCH.h>
-#include <DataFormatsMID/ROFRecord.h>
+//#include <DataFormatsMID/ROFRecord.h>
 #include <DataFormatsMID/Track.h>
 #include <ReconstructionDataFormats/TrackMCHMID.h>
 #include <ReconstructionDataFormats/GlobalFwdTrack.h>
@@ -46,6 +46,21 @@ using namespace o2::quality_control_modules::muon;
 
 constexpr double muonMass = 0.1056584;
 constexpr double muonMass2 = muonMass * muonMass;
+
+static o2::itsmft::ROFRecord getMFTTrackROF(int iTrack, const o2::globaltracking::RecoContainer& recoCont)
+{
+  // if the MID track is present, use the time from MID
+  auto rofs = recoCont.getMFTTracksROFRecords();
+  for (const auto& rof : rofs) {
+    int lastEntry = rof.getFirstEntry() + rof.getNEntries() - 1;
+    if (iTrack < rof.getFirstEntry() || iTrack > lastEntry) {
+      continue;
+    }
+    return rof;
+  }
+
+  return o2::itsmft::ROFRecord{};
+}
 
 static InteractionRecord getMFTTrackIR(int iTrack, const o2::globaltracking::RecoContainer& recoCont)
 {
@@ -76,6 +91,21 @@ static MuonTrack::Time getMFTTrackTime(int iTrack, const o2::globaltracking::Rec
   }
 
   return MuonTrack::Time{};
+}
+
+static o2::mid::ROFRecord getMIDTrackROF(int iTrack, const o2::globaltracking::RecoContainer& recoCont)
+{
+  // if the MID track is present, use the time from MID
+  auto rofs = recoCont.getMIDTracksROFRecords();
+  for (const auto& rof : rofs) {
+    int lastEntry = rof.firstEntry + rof.nEntries - 1;
+    if (iTrack < rof.firstEntry || iTrack > lastEntry) {
+      continue;
+    }
+    return rof;
+  }
+
+  return o2::mid::ROFRecord{};
 }
 
 static InteractionRecord getMIDTrackIR(int iTrack, const o2::globaltracking::RecoContainer& recoCont)
@@ -335,7 +365,8 @@ static o2::mch::TrackParam forwardTrackToMCHTrack(const o2::track::TrackParCovFw
 namespace o2::quality_control_modules::muon
 {
 
-MuonTrack::MuonTrack(const o2::mch::TrackMCH* track, int trackID, const o2::globaltracking::RecoContainer& recoCont, uint32_t firstTForbit)
+MuonTrack::MuonTrack(const o2::mch::TrackMCH* track, int trackID, const o2::globaltracking::RecoContainer& recoCont, uint32_t firstTForbit, double BzMFT)
+ : mBzMFT(BzMFT)
 {
   mTrackMCH = track;
 
@@ -355,19 +386,23 @@ MuonTrack::MuonTrack(const o2::mch::TrackMCH* track, int trackID, const o2::glob
 
   mTrackParameters.setZ(track->getZ());
   mTrackParameters.setParameters(track->getParameters());
+  mTrackParameters.setCovariances(track->getCovariances());
 
   mTrackParametersMCH.setZ(track->getZ());
   mTrackParametersMCH.setParameters(track->getParameters());
+  mTrackParametersMCH.setCovariances(track->getCovariances());
 
   mTrackParametersAtMID.setZ(track->getZAtMID());
   mTrackParametersAtMID.setParameters(track->getParametersAtMID());
+  mTrackParametersAtMID.setCovariances(track->getCovariancesAtMID());
 
   mChi2OverNDFMCH = mTrackMCH->getChi2OverNDF();
 
   init();
 }
 
-MuonTrack::MuonTrack(const TrackMCHMID* track, const o2::globaltracking::RecoContainer& recoCont, uint32_t firstTForbit)
+MuonTrack::MuonTrack(const TrackMCHMID* track, const o2::globaltracking::RecoContainer& recoCont, uint32_t firstTForbit, double BzMFT)
+ : mBzMFT(BzMFT)
 {
   auto tracksMCH = recoCont.getMCHTracks();
   auto tracksMID = recoCont.getMIDTracks();
@@ -413,6 +448,7 @@ MuonTrack::MuonTrack(const TrackMCHMID* track, const o2::globaltracking::RecoCon
     if (trackTimeMUS.second) {
       mTimeMID = trackTimeMUS.first;
     }
+    mRofMID = getMIDTrackROF(mTrackIdMID, recoCont);
 
     mChi2OverNDFMID = mTrackMID->getChi2OverNDF();
   }
@@ -421,17 +457,22 @@ MuonTrack::MuonTrack(const TrackMCHMID* track, const o2::globaltracking::RecoCon
 
   mTrackParameters.setZ(trackMCH.getZ());
   mTrackParameters.setParameters(trackMCH.getParameters());
+  mTrackParameters.setCovariances(trackMCH.getCovariances());
 
   mTrackParametersMCH.setZ(trackMCH.getZ());
   mTrackParametersMCH.setParameters(trackMCH.getParameters());
+  mTrackParametersMCH.setCovariances(trackMCH.getCovariances());
 
   mTrackParametersAtMID.setZ(trackMCH.getZAtMID());
   mTrackParametersAtMID.setParameters(trackMCH.getParametersAtMID());
+  mTrackParametersAtMID.setCovariances(trackMCH.getCovariancesAtMID());
 
   init();
 }
 
-MuonTrack::MuonTrack(const GlobalFwdTrack* track, const o2::globaltracking::RecoContainer& recoCont, uint32_t firstTForbit) : mTrackParameters(forwardTrackToMCHTrack(*track))
+MuonTrack::MuonTrack(const GlobalFwdTrack* track, const o2::globaltracking::RecoContainer& recoCont, uint32_t firstTForbit, double BzMFT)
+: mTrackParameters(forwardTrackToMCHTrack(*track)),
+  mBzMFT(BzMFT)
 {
   auto tracksMFT = recoCont.getMFTTracks();
   auto tracksMCH = recoCont.getMCHTracks();
@@ -463,15 +504,19 @@ MuonTrack::MuonTrack(const GlobalFwdTrack* track, const o2::globaltracking::Reco
     mTimeMFT = getMFTTrackTime(iMFT, recoCont, firstTForbit);
     mTrackParametersMFT.setZ(tracksMFT[iMFT].getOutParam().getZ());
     mTrackParametersMFT.setParameters(forwardTrackToMCHTrack(tracksMFT[iMFT].getOutParam()).getParameters());
+
+    mRofMFT = getMFTTrackROF(mTrackIdMFT, recoCont);
   }
   if (iMCH >= 0) {
     mTrackMCH = &(tracksMCH[iMCH]);
     auto& trackMCH = tracksMCH[iMCH];
     mTrackParametersMCH.setZ(trackMCH.getZ());
     mTrackParametersMCH.setParameters(trackMCH.getParameters());
+    mTrackParametersMCH.setCovariances(trackMCH.getCovariances());
 
     mTrackParametersAtMID.setZ(trackMCH.getZAtMID());
     mTrackParametersAtMID.setParameters(trackMCH.getParametersAtMID());
+    mTrackParametersAtMID.setCovariances(trackMCH.getCovariancesAtMID());
 
     mIRMCH = getMCHTrackIR(iMCH, recoCont, firstTForbit);
     mTimeMCH = getMCHTrackTime(iMCH, recoCont, firstTForbit);
@@ -486,6 +531,8 @@ MuonTrack::MuonTrack(const GlobalFwdTrack* track, const o2::globaltracking::Reco
     mTrackMID = &(tracksMID[iMID]);
     mIRMID = getMIDTrackIR(iMID, recoCont);
     mTimeMID = getMIDTrackTime(iMID, recoCont, firstTForbit);
+
+    mRofMID = getMIDTrackROF(mTrackIdMID, recoCont);
 
     mChi2OverNDFMID = mTrackMID->getChi2OverNDF();
   }
@@ -512,6 +559,66 @@ void MuonTrack::init()
   mDCA = ::getDCA(mTrackParameters);
   mDCAMCH = ::getDCA(mTrackParametersMCH);
   mRAbs = getRAbsMCH(mTrackParametersMCH);
+
+  o2::mch::TrackParam trackParamAtAbs = getTrackParamMCH();
+  extrapToZMCH(trackParamAtAbs, sAbsZEnd);
+  mTrackXAbsMCH = trackParamAtAbs.getNonBendingCoor();
+  mTrackYAbsMCH = trackParamAtAbs.getBendingCoor();
+  mTrackZAbsMCH = sAbsZEnd;
+  /*std::cout << "MCH track at Abs: mom=[" << getTrackMCH()->getPx() << "," << getTrackMCH()->getPy() << "," << getTrackMCH()->getPz() << "]  pos=["
+      << getTrackMCH()->getX() << "," << getTrackMCH()->getY() << "," << getTrackMCH()->getZ() << "]  mplane=["
+      << mTrackXAbsMCH << "," << mTrackYAbsMCH << "," << mTrackZAbsMCH << "]" << std::endl;
+  for (int i = 0; i < 5; i++) {
+    double err = TMath::Sqrt(trackParamAtAbs.getCovariances()(i,i));
+    std::cout << "  err(" << i << "," << i << ") = " << err << std::endl;
+  }*/
+
+  o2::mch::TrackParam trackParamAtMFT = getTrackParamMCH();
+  //std::cout << "Extrapolating MCH track from Z=" << getTrackParamMCH().getZ() << " to Z=" << sLastMFTPlaneZ << std::endl;
+  if (o2::mch::TrackExtrap::extrapToVertexWithoutBranson(trackParamAtMFT, sLastMFTPlaneZ)) {
+    mTrackXMatchMCH = trackParamAtMFT.getNonBendingCoor();
+    mTrackYMatchMCH = trackParamAtMFT.getBendingCoor();
+    mTrackZMatchMCH = sLastMFTPlaneZ;
+    mTrackSigmaXMatchMCH = trackParamAtMFT.getCovariances()(0, 0);
+    mTrackSigmaYMatchMCH = trackParamAtMFT.getCovariances()(2, 2);
+  }
+  double R = TMath::Sqrt(mTrackXMatchMCH*mTrackXMatchMCH + mTrackYMatchMCH*mTrackYMatchMCH);
+  if (hasMID() && R > 5 && R < 12 && getTrackMCH()->getP() > 10) {
+    std::cout << "MCH track at MFT: mom=" << getTrackMCH()->getP() << "  pos@MFT=["
+        << mTrackXMatchMCH << "," << mTrackYMatchMCH << "," << mTrackZMatchMCH << "]" << std::endl;
+    for (int i = 0; i < 5; i++) {
+      double err = TMath::Sqrt(trackParamAtMFT.getCovariances()(i,i));
+      std::cout << "  err(" << i << "," << i << ") = " << err << std::endl;
+    }
+  }
+
+  if (hasMFT()) {
+    auto trackMFT = *(getTrackMFT());
+    trackMFT.setParameters(getTrackMFT()->getOutParam().getParameters());
+    trackMFT.setZ(getTrackMFT()->getOutParam().getZ());
+    trackMFT.setCovariances(getTrackMFT()->getOutParam().getCovariances());
+    trackMFT.setTrackChi2(getTrackMFT()->getOutParam().getTrackChi2());
+    // Extrapolate MFT track parameters and covariances matrix to "sLastMFTPlaneZ"
+    // Parameters: helix track model; Error propagation: Quadratic
+    // If "mBzMFT" is zero: linear track model
+    trackMFT.propagateToZ(sLastMFTPlaneZ, mBzMFT);
+
+    mTrackXMatchMFT = trackMFT.getOutParam().getX();
+    mTrackYMatchMFT = trackMFT.getOutParam().getY();
+    mTrackZMatchMFT = trackMFT.getOutParam().getZ();
+  }
+
+/*
+  const double x[3] = {50., 50., SSimpleBPosition};
+  double b[3] = {0., 0., 0.};
+  TGeoGlobalMagField::Instance()->Field(x, b);
+  sSimpleBValue = b[0];
+  sFieldON = (TMath::Abs(sSimpleBValue) > 1.e-10) ? true : false;
+
+  auto field = static_cast<o2::field::MagneticField*>(TGeoGlobalMagField::Instance()->GetField());
+  double centerMFT[3] = {0, 0, -61.4}; // Field at center of MFT
+  auto Bz = field->getBz(centerMFT);
+*/
 }
 
 bool MuonTrack::extrapToZMFT(o2::mch::TrackParam& trackParam, float z) const

@@ -16,6 +16,10 @@
 #include "DataFormatsGlobalTracking/RecoContainer.h"
 #include <memory>
 #include "MUONCommon/TrackPlotter.h"
+
+#include <TH1F.h>
+#include <TH2F.h>
+
 #include <vector>
 #include <array>
 
@@ -50,10 +54,18 @@ class TracksTask /*final*/ : public TaskInterface
  private:
   std::map<GID::Source, std::unique_ptr<TrackPlotter>> mTrackPlotters;
   std::map<GID::Source, std::unique_ptr<TrackPlotter>> mTrackPlottersWithCuts;
+  std::array<std::unique_ptr<TrackPlotter>, 8> mTrackPlottersBgdZDC;
   std::shared_ptr<o2::globaltracking::DataRequest> mDataRequest;
   o2::globaltracking::RecoContainer mRecoCont;
   GID::mask_t mSrc = GID::getSourcesMask("MCH-MID");
   GID::mask_t mAllowedSources = GID::getSourcesMask("MFT,MCH,MID,MCH-MID,MFT-MCH,MFT-MCH-MID");
+
+  std::vector<o2::InteractionRecord> mBackgroundZDC;
+  std::vector<o2::InteractionRecord> mBackgroundITS;
+
+  std::unique_ptr<TH1F> mBcZDC;
+  std::unique_ptr<TH1F> mBgdZDCTrackMult;
+  std::unique_ptr<TH2F> mDCAvsBcZDC;
 
   // MCH-MID
   gsl::span<const o2::dataformats::TrackMCHMID> mMCHMIDTracks;

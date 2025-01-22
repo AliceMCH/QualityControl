@@ -23,6 +23,8 @@
 #include <Framework/DataRefUtils.h>
 #include <Framework/InputRecord.h>
 #include <CommonConstants/LHCConstants.h>
+#include "TGeoGlobalMagField.h"
+#include "Field/MagneticField.h"
 #include <TH2F.h>
 #include <gsl/span>
 #include <set>
@@ -116,6 +118,26 @@ std::unique_ptr<TH1DRatio> TrackPlotter::createHisto(const char* name, const cha
 }
 
 template <>
+std::unique_ptr<TH1DRatio> TrackPlotter::createHisto(const char* name, const char* title,
+                                                     int nbins, double* xbins,
+                                                     bool optional,
+                                                     bool statBox,
+                                                     const char* drawOptions,
+                                                     const char* displayHints)
+{
+  if (optional && !mFullHistos) {
+    return nullptr;
+  }
+  std::string fullTitle = GID::getSourceName(mSrc) + " " + title;
+  auto h = std::make_unique<TH1DRatio>(name, fullTitle.c_str(), nbins, xbins, true);
+  if (!statBox) {
+    h->SetStats(0);
+  }
+  histograms().emplace_back(HistInfo{ h.get(), drawOptions, displayHints });
+  return h;
+}
+
+template <>
 std::unique_ptr<TH2DRatio> TrackPlotter::createHisto(const char* name, const char* title,
                                                      int nbins, double xmin, double xmax,
                                                      int nbinsy, double ymin, double ymax,
@@ -140,9 +162,9 @@ void TrackPlotter::createTrackHistos(int maxTracksPerTF, int etaBins, int phiBin
 {
   int nbins = 100;
   auto xLogBins = makeLogBinning(1, maxTracksPerTF, nbins);
-  mNofTracksPerTF[0] = createHisto<TH1D>(TString::Format("%sPositive/TracksPerTF", mPath.c_str()), "Number of tracks per TimeFrame (+);Number of tracks per TF", nbins, xLogBins.data(), true, false, "logx");
-  mNofTracksPerTF[1] = createHisto<TH1D>(TString::Format("%sNegative/TracksPerTF", mPath.c_str()), "Number of tracks per TimeFrame (-);Number of tracks per TF", nbins, xLogBins.data(), true, false, "logx");
-  mNofTracksPerTF[2] = createHisto<TH1D>(TString::Format("%sTracksPerTF", mPath.c_str()), "Number of tracks per TimeFrame;Number of tracks per TF", nbins, xLogBins.data(), false, false, "logx");
+  mNofTracksPerTF[0] = createHisto<TH1D>(TString::Format("%sPositive/TracksPerTF", mPath.c_str()), "Number of tracks per TimeFrame (+);Number of tracks per TF", nbins, xLogBins.data(), true, false, "hist logx");
+  mNofTracksPerTF[1] = createHisto<TH1D>(TString::Format("%sNegative/TracksPerTF", mPath.c_str()), "Number of tracks per TimeFrame (-);Number of tracks per TF", nbins, xLogBins.data(), true, false, "hist logx");
+  mNofTracksPerTF[2] = createHisto<TH1D>(TString::Format("%sTracksPerTF", mPath.c_str()), "Number of tracks per TimeFrame;Number of tracks per TF", nbins, xLogBins.data(), false, false, "hist logx");
 
   mTrackChi2OverNDF[0] = createHisto<TH1DRatio>(TString::Format("%sPositive/TrackMCHChi2OverNDF", mPath.c_str()), "Track #chi^{2}/ndf (MCH +);#chi^{2}/ndf;entries/s", 500, 0, 50, true, false, "hist");
   mTrackChi2OverNDF[1] = createHisto<TH1DRatio>(TString::Format("%sNegative/TrackMCHChi2OverNDF", mPath.c_str()), "Track #chi^{2}/ndf (MCH -);#chi^{2}/ndf;entries/s", 500, 0, 50, true, false, "hist");
@@ -176,6 +198,10 @@ void TrackPlotter::createTrackHistos(int maxTracksPerTF, int etaBins, int phiBin
   mTrackPt[1] = createHisto<TH1DRatio>(TString::Format("%sNegative/TrackPt", mPath.c_str()), "Track p_{T} (-);p_{T} (GeV/c);entries/s", ptBins, 0, 30, true, false, "hist logy");
   mTrackPt[2] = createHisto<TH1DRatio>(TString::Format("%sTrackPt", mPath.c_str()), "Track p_{T};p_{T} (GeV/c);entries/s", ptBins, 0, 30, false, false, "hist logy");
 
+  mTrackP[0] = createHisto<TH1DRatio>(TString::Format("%sPositive/TrackP", mPath.c_str()), "Track momentum (+);p (GeV/c);entries/s", 2000, 0, 1000, true, false, "hist logy");
+  mTrackP[1] = createHisto<TH1DRatio>(TString::Format("%sNegative/TrackP", mPath.c_str()), "Track momentum (-);p (GeV/c);entries/s", 2000, 0, 1000, true, false, "hist logy");
+  mTrackP[2] = createHisto<TH1DRatio>(TString::Format("%sTrackP", mPath.c_str()), "Track p_{T};p (GeV/c);entries/s", 2000, 0, 1000, false, false, "hist logy");
+
   mTrackQOverPt = createHisto<TH1DRatio>(TString::Format("%sTrackQOverPt", mPath.c_str()), "Track q/p_{T};q/p_{T} (GeV/c)^{-1};entries/s", 200, -10, 10, false, false, "hist logy");
 
   mTrackEtaPt[0] = createHisto<TH2DRatio>(TString::Format("%sPositive/TrackEtaPt", mPath.c_str()), "Track p_{T} vs #eta (+);#eta;p_{T} (GeV/c)", etaBins / 5, -4.5, -2, ptBins / 5, 0, 30, true, false, "colz");
@@ -191,7 +217,19 @@ void TrackPlotter::createTrackHistos(int maxTracksPerTF, int etaBins, int phiBin
   if (mSrc == GID::MFTMCH || mSrc == GID::MFTMCHMID) {
     mMatchScoreMFTMCH = createHisto<TH1D>(TString::Format("%sMatchScoreMFTMCH", mPath.c_str()), "Match Score MFT-MCH;score", 1000, 0, 100, false, false, "hist");
     mMatchChi2MFTMCH = createHisto<TH1D>(TString::Format("%sMatchChi2MFTMCH", mPath.c_str()), "Match #chi^{2} MFT-MCH;#chi^{2}", 1000, 0, 100, false, false, "hist");
+
     mMatchNMFTCandidates = createHisto<TH1D>(TString::Format("%sMatchNMFTCandidates", mPath.c_str()), "MFT Candidates;candidates", 1000, 0, 1000, false, false, "hist");
+    mMatchNMFTCandidatesVsROFSize = createHisto<TH2F>(TString::Format("%sMatchNMFTCandidatesVsROFSize", mPath.c_str()), "MFT Candidates vs. ROF size;candidates;ROF size", 1000, 0, 1000, 1000, 0, 1000, false, false, "colz");
+
+    mMatchDRMFTMCH = createHisto<TH1D>(TString::Format("%sMatchDRMFTMCH", mPath.c_str()), "MFT-MCH dR;dR (cm)", 1000, -50, 50, false, false, "hist");
+    mMatchDPhiMFTMCH = createHisto<TH1D>(TString::Format("%sMatchDPhiMFTMCH", mPath.c_str()), "MFT-MCH #Delta#phi;#Delta#phi (rad)", 1000, -0.5, 0.5, false, false, "hist");
+    mMatchDXMFTMCH = createHisto<TH1D>(TString::Format("%sMatchDXMFTMCH", mPath.c_str()), "MFT-MCH dX;dX (cm)", 1000, -50, 50, false, false, "hist");
+    mMatchDYMFTMCH = createHisto<TH1D>(TString::Format("%sMatchDYMFTMCH", mPath.c_str()), "MFT-MCH dY;dY (cm)", 1000, -50, 50, false, false, "hist");
+
+    mMatchDXMFTMCHVsX = createHisto<TH2F>(TString::Format("%sMatchDXMFTMCHVsX", mPath.c_str()), "MFT-MCH dX vs. X;X (cm);dX (cm)", 30, -15, 15, 200, -10, 10, false, false, "colz");
+    mMatchDXMFTMCHVsY = createHisto<TH2F>(TString::Format("%sMatchDXMFTMCHVsY", mPath.c_str()), "MFT-MCH dX vs. Y;Y (cm);dX (cm)", 30, -15, 15, 200, -10, 10, false, false, "colz");
+    mMatchDYMFTMCHVsX = createHisto<TH2F>(TString::Format("%sMatchDYMFTMCHVsX", mPath.c_str()), "MFT-MCH dY vs. X;X (cm);dY (cm)", 30, -15, 15, 200, -10, 10, false, false, "colz");
+    mMatchDYMFTMCHVsY = createHisto<TH2F>(TString::Format("%sMatchDYMFTMCHVsY", mPath.c_str()), "MFT-MCH dY vs. Y;Y (cm);dY (cm)", 30, -15, 15, 200, -10, 10, false, false, "colz");
 
     mTrackEtaGlobal[0] = createHisto<TH1DRatio>(TString::Format("%sPositive/TrackEtaGlobal", mPath.c_str()), "Global track #eta (+);#eta;entries/s", etaBins, -4.5, -2, true, false, "hist");
     mTrackEtaGlobal[1] = createHisto<TH1DRatio>(TString::Format("%sNegative/TrackEtaGlobal", mPath.c_str()), "Global track #eta (-);#eta;entries/s", etaBins, -4.5, -2, true, false, "hist");
@@ -242,15 +280,22 @@ void TrackPlotter::createTrackHistos(int maxTracksPerTF, int etaBins, int phiBin
     mTrackDPtVsPt[0] = createHisto<TH2DRatio>(TString::Format("%sPositive/TrackDPtVsPt", mPath.c_str()), "Track p_{T}^{GLO}-p_{T}^{MCH} vs p_{T}^{MCH} (+);p_{T}^{MCH};p_{T}^{GLO}-p_{T}^{MCH}", ptBins / 5, 0, 30, 200, -10, 10, true, false, "colz");
     mTrackDPtVsPt[1] = createHisto<TH2DRatio>(TString::Format("%sNegative/TrackDPtVsPt", mPath.c_str()), "Track p_{T}^{GLO}-p_{T}^{MCH} vs p_{T}^{MCH} (-);p_{T}^{MCH};p_{T}^{GLO}-p_{T}^{MCH}", ptBins / 5, 0, 30, 200, -10, 10, true, false, "colz");
     mTrackDPtVsPt[2] = createHisto<TH2DRatio>(TString::Format("%sTrackDPtVsPt", mPath.c_str()), "Track p_{T}^{GLO}-p_{T}^{MCH} vs p_{T}^{MCH};p_{T}^{MCH};p_{T}^{GLO}-p_{T}^{MCH}", ptBins / 5, 0, 30, 200, -10, 10, false, false, "colz");
+
+    mTrackPosAtMatchingPlaneMCH = createHisto<TH2DRatio>(TString::Format("%sTrackPosAtMatchingPlaneMCH", mPath.c_str()), "MCH Track position at MFT-MCH matching plane;X (cm);Y (cm)", 100, -50, 50, 100, -50, 50, false, false, "colz");
+    mTrackPosAtMatchingPlaneMFT = createHisto<TH2DRatio>(TString::Format("%sTrackPosAtMatchingPlaneMFT", mPath.c_str()), "MFT Track position at MFT-MCH matching plane;X (cm);Y (cm)", 100, -50, 50, 100, -50, 50, false, false, "colz");
   }
 
   if (mSrc == GID::MCHMID || mSrc == GID::MFTMCHMID) {
     mMatchChi2MCHMID = createHisto<TH1D>(TString::Format("%sMatchChi2MCHMID", mPath.c_str()), "Match #chi^{2} MCH-MID;#chi^{2}", 1000, 0, 100, false, true, "hist");
     mTrackDT = createHisto<TH1D>(TString::Format("%sTrackDT", mPath.c_str()), "MCH-MID time correlation;ns", 4000, -500, 500, false, true, "hist");
+    mTrackPosAtMID = createHisto<TH2DRatio>(TString::Format("%sTrackPosAtMID", mPath.c_str()), "MCH Track position at MID entrance;X (cm);Y (cm)", 80, -400, 400, 80, -400, 400, false, false, "colz");
   }
 
-  mTrackPosAtMFT = createHisto<TH2DRatio>(TString::Format("%sTrackPosAtMFT", mPath.c_str()), "MCH Track position at MFT exit;X (cm);Y (cm)", 100, -50, 50, 100, -50, 50, false, false, "colz");
-  mTrackPosAtMID = createHisto<TH2DRatio>(TString::Format("%sTrackPosAtMID", mPath.c_str()), "MCH Track position at MID entrance;X (cm);Y (cm)", 80, -400, 400, 80, -400, 400, false, false, "colz");
+  mTrackPosAtVertex = createHisto<TH2DRatio>(TString::Format("%sTrackPosAtVertex", mPath.c_str()), "MCH Track position at vertex;X (cm);Y (cm)", 50, -250, 250, 50, -250, 250, false, false, "colz");
+  mTrackPosAtAbsorber = createHisto<TH2DRatio>(TString::Format("%sTrackPosAtAbsorber", mPath.c_str()), "MCH Track position at absorber exit;X (cm);Y (cm)", 50, -250, 250, 50, -250, 250, false, false, "colz");
+
+  mSigmaXvsP = createHisto<TH2D>(TString::Format("%sSigmaXvsP", mPath.c_str()), "MCH Track X resolution vs. P at matching plane;momentum (GeV/c);#sigma_{X} (cm)", 200, 0, 1000, 100, 0, 10, false, false, "colz");
+  mSigmaYvsP = createHisto<TH2D>(TString::Format("%sSigmaYvsP", mPath.c_str()), "MCH Track Y resolution vs. P at matching plane;momentum (GeV/c);#sigma_{Y} (cm)", 200, 0, 1000, 100, 0, 10, false, false, "colz");
 }
 
 void TrackPlotter::createTrackPairHistos()
@@ -338,17 +383,33 @@ void TrackPlotter::fillTrackHistos(const MuonTrack& track)
       Fill(mMatchChi2MCHMID, track.getMatchInfoFwd().getMIDMatchingChi2());
       break;
     }
+    case GID::MFTMCHMID: {
+      Fill(mMatchChi2MCHMID, track.getMatchInfoFwd().getMIDMatchingChi2());
+    }
     case GID::MFTMCH: {
       Fill(mMatchScoreMFTMCH, track.getMatchInfoFwd().getMFTMCHMatchingScore());
       Fill(mMatchChi2MFTMCH, track.getMatchInfoFwd().getMFTMCHMatchingChi2());
       Fill(mMatchNMFTCandidates, track.getMatchInfoFwd().getNMFTCandidates());
-      break;
-    }
-    case GID::MFTMCHMID: {
-      Fill(mMatchScoreMFTMCH, track.getMatchInfoFwd().getMFTMCHMatchingScore());
-      Fill(mMatchChi2MFTMCH, track.getMatchInfoFwd().getMFTMCHMatchingChi2());
-      Fill(mMatchChi2MCHMID, track.getMatchInfoFwd().getMIDMatchingChi2());
-      Fill(mMatchNMFTCandidates, track.getMatchInfoFwd().getNMFTCandidates());
+      Fill(mMatchNMFTCandidatesVsROFSize, track.getMatchInfoFwd().getNMFTCandidates(), track.getRofMFT().getNEntries());
+
+      Fill(mTrackPosAtMatchingPlaneMCH, track.getXMatchMCH(), track.getYMatchMCH());
+      Fill(mTrackPosAtMatchingPlaneMFT, track.getXMatchMFT(), track.getYMatchMFT());
+
+      double RMCH = TMath::Sqrt(track.getXMatchMCH() * track.getXMatchMCH() + track.getYMatchMCH() * track.getYMatchMCH());
+      double RMFT = TMath::Sqrt(track.getXMatchMFT() * track.getXMatchMFT() + track.getYMatchMFT() * track.getYMatchMFT());
+      double dR = RMFT - RMCH;
+      Fill(mMatchDRMFTMCH, dR);
+
+      Fill(mMatchDXMFTMCH, track.getXMatchMFT() - track.getXMatchMCH());
+      Fill(mMatchDYMFTMCH, track.getYMatchMFT() - track.getYMatchMCH());
+
+      Fill(mMatchDXMFTMCHVsX, track.getXMatchMFT(), track.getXMatchMFT() - track.getXMatchMCH());
+      Fill(mMatchDXMFTMCHVsY, track.getYMatchMFT(), track.getXMatchMFT() - track.getXMatchMCH());
+      Fill(mMatchDYMFTMCHVsX, track.getXMatchMFT(), track.getYMatchMFT() - track.getYMatchMCH());
+      Fill(mMatchDYMFTMCHVsY, track.getYMatchMFT(), track.getYMatchMFT() - track.getYMatchMCH());
+
+      Fill(mSigmaXvsP, std::fabs(track.getMuonMomentumMCH().P()), track.getSigmaXMatchMCH());
+      Fill(mSigmaYvsP, std::fabs(track.getMuonMomentumMCH().P()), track.getSigmaYMatchMCH());
       break;
     }
     default:
@@ -420,6 +481,10 @@ void TrackPlotter::fillTrackHistos(const MuonTrack& track)
   Fill(mTrackPhiPtGlobal[q], phi, pt);
   Fill(mTrackPhiPtGlobal[2], phi, pt);
 
+  double pMCH = track.hasMCH() ? std::fabs(track.getMuonMomentumMCH().P()) : 0;
+  Fill(mTrackP[q], pMCH);
+  Fill(mTrackP[2], pMCH);
+
   if (track.getSign() != 0 && ptMCH != 0) {
     double qOverPtMCH = track.getSign() / ptMCH;
     Fill(mTrackQOverPt, qOverPtMCH);
@@ -430,12 +495,34 @@ void TrackPlotter::fillTrackHistos(const MuonTrack& track)
     Fill(mTrackQOverPtGlobal, qOverPt);
   }
 
-  o2::mch::TrackParam trackParamAtMFT;
+  o2::mch::TrackParam trackParamAtVertex;
+  track.extrapToZMCH(trackParamAtVertex, 0);
+  double xVtx = trackParamAtVertex.getNonBendingCoor();
+  double yVtx = trackParamAtVertex.getBendingCoor();
+  Fill(mTrackPosAtVertex, xVtx, yVtx);
+
+  /*
+  o2::mch::TrackParam trackParamAtAbs;
+  track.extrapToZMCH(trackParamAtAbs, o2::quality_control_modules::muon::MuonTrack::sAbsZEnd);
+  double xAbs = trackParamAtAbs.getNonBendingCoor();
+  double yAbs = trackParamAtAbs.getBendingCoor();
+  Fill(mTrackPosAtAbsorber, xAbs, yAbs);
+  */
+
+  Fill(mTrackPosAtAbsorber, track.getXAbs(), track.getYAbs());
+
+  /*
+  o2::mch::TrackParam trackParamAtMFT = track.getTrackParamMCH();
   float zMFT = sLastMFTPlaneZ;
-  track.extrapToZMCH(trackParamAtMFT, zMFT);
-  double xMCH = trackParamAtMFT.getNonBendingCoor();
-  double yMCH = trackParamAtMFT.getBendingCoor();
-  Fill(mTrackPosAtMFT, trackParamAtMFT.getNonBendingCoor(), trackParamAtMFT.getBendingCoor());
+  //track.extrapToZMCH(trackParamAtMFT, zMFT);
+  double xMCH = 1000000;
+  double yMCH = 1000000;
+  if (o2::mch::TrackExtrap::extrapToVertexWithoutBranson(trackParamAtMFT, zMFT)) {
+    xMCH = trackParamAtMFT.getNonBendingCoor();
+    yMCH = trackParamAtMFT.getBendingCoor();
+  }
+  Fill(mTrackPosAtMFT, xMCH, yMCH);
+  */
 
   Fill(mTrackPosAtMID, track.getXMid(), track.getYMid());
 }
@@ -449,8 +536,20 @@ void TrackPlotter::fillHistograms(const o2::globaltracking::RecoContainer& recoC
     sFirst = false;
   }
 
+  if (!o2::mch::TrackExtrap::isFieldON()) {
+    o2::mch::TrackExtrap::setField();
+  }
+
   if (mNOrbitsPerTF < 0) {
     mNOrbitsPerTF = o2::base::GRPGeomHelper::instance().getNHBFPerTF();
+  }
+
+  if (mBzMFT == 0) {
+    auto field = static_cast<o2::field::MagneticField*>(TGeoGlobalMagField::Instance()->GetField());
+    if (field) {
+    double centerMFT[3] = {0, 0, -61.4}; // Field at center of MFT
+    mBzMFT = field->getBz(centerMFT);
+    }
   }
 
   mMuonTracks.clear();
@@ -459,25 +558,25 @@ void TrackPlotter::fillHistograms(const o2::globaltracking::RecoContainer& recoC
     auto tracksMCH = recoCont.getMCHTracks();
     int trackID = 0;
     for (auto& t : tracksMCH) {
-      mMuonTracks.emplace_back(std::make_pair<MuonTrack, bool>({ &t, trackID, recoCont, mFirstTForbit }, true));
+      mMuonTracks.emplace_back(std::make_pair<MuonTrack, bool>({ &t, trackID, recoCont, mFirstTForbit, mBzMFT }, true));
       trackID += 1;
     }
   }
   if (mSrc == GID::MFTMCH || mSrc == GID::MFTMCHMID) {
     auto tracksFwd = recoCont.getGlobalFwdTracks();
     for (auto& t : tracksFwd) {
-      MuonTrack mt(&t, recoCont, mFirstTForbit);
+      MuonTrack mt(&t, recoCont, mFirstTForbit, mBzMFT);
       // skip tracks without MID if full matching is requested
       if (mSrc == GID::MFTMCHMID && !mt.hasMID()) {
         continue;
       }
-      mMuonTracks.emplace_back(std::make_pair<MuonTrack, bool>({ &t, recoCont, mFirstTForbit }, true));
+      mMuonTracks.emplace_back(std::make_pair<MuonTrack, bool>({ &t, recoCont, mFirstTForbit, mBzMFT }, true));
     }
   }
   if (mSrc == GID::MCHMID) {
     auto tracksMCHMID = recoCont.getMCHMIDMatches();
     for (auto& t : tracksMCHMID) {
-      mMuonTracks.emplace_back(std::make_pair<MuonTrack, bool>({ &t, recoCont, mFirstTForbit }, true));
+      mMuonTracks.emplace_back(std::make_pair<MuonTrack, bool>({ &t, recoCont, mFirstTForbit, mBzMFT }, true));
     }
   }
 

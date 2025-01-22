@@ -22,6 +22,9 @@
 #include "QualityControl/MonitorObject.h"
 #include "QualityControl/DatabaseInterface.h"
 #include "QualityControl/ActivityHelpers.h"
+#include "QualityControl/CcdbDatabase.h"
+#include "DataFormatsCTP/CTPRateFetcher.h"
+#include "DataFormatsParameters/GRPECSObject.h"
 // ROOT
 #include <TClass.h>
 #include <TH1.h>
@@ -29,6 +32,7 @@
 using namespace o2::quality_control::postprocessing;
 using namespace o2::quality_control::core;
 using namespace o2::quality_control;
+using namespace o2::quality_control::repository;
 
 namespace o2::quality_control_modules::common
 {
@@ -111,6 +115,18 @@ void ReferenceComparatorTask::initialize(quality_control::postprocessing::Trigge
 
   ILOG(Info, Devel) << "Reference run set to '" << mReferenceRun << "' for activity " << trigger.activity << ENDM;
 
+  auto referenceRunsList = o2::utils::Str::tokenize(getCustomParameter(mCustomParameters, "referenceRuns", trigger.activity, ""),
+                                                    ';', false, true);
+
+  for (const auto& referenceRunStr : referenceRunsList) {
+    auto rateAndRun = o2::utils::Str::tokenize(referenceRunStr, ':', false, true);
+    if (rateAndRun.size() == 2) {
+      double rate = std::stod(rateAndRun[0]);
+      size_t run = std::stoi(rateAndRun[1]);
+      mReferenceRunForRate.insert(std::make_pair(rate, run));
+    }
+  }
+
   auto referenceActivity = trigger.activity;
   referenceActivity.mId = mReferenceRun;
   if (mIgnorePeriodForReference) {
@@ -118,6 +134,43 @@ void ReferenceComparatorTask::initialize(quality_control::postprocessing::Trigge
   }
   if (mIgnorePassForReference) {
     referenceActivity.mPassName = "";
+  }
+
+  // initialise (new run)
+  auto& ccdbManager = o2::ccdb::BasicCCDBManager::instance();
+  ccdbManager.setURL("https://alice-ccdb.cern.ch");
+
+  auto database = std::make_unique<CcdbDatabase>();
+  database->connect("https://alice-ccdb.cern.ch", "", "", "");
+
+
+  for (const auto& [rate, runNumber] : mReferenceRunForRate) {
+    o2::ctp::CTPRateFetcher fetcher;
+    fetcher.setupRun(runNumber, &ccdbManager, 1732165391957-1 /*repository::DatabaseInterface::Timestamp::Latest*/, false);
+
+    // get scalers
+    std::map<string, string> metadata;
+    metadata["runNumber"] = std::to_string(runNumber);
+    //auto grpECS = ccdbManager.getSpecific<o2::parameters::GRPECSObject>("GLO/Config/GRPECS", 1698896865746-1 /*repository::DatabaseInterface::Timestamp::Latest*/, metadata);
+    o2::ctp::CTPRunScalers* ctpscalers = ccdbManager.getSpecific<ctp::CTPRunScalers>("CTP/Calib/Scalers", 1732179095000-1 /*repository::DatabaseInterface::Timestamp::Latest*/, metadata);
+    //o2::ctp::CTPRunScalers* ctpscalers = ccdbManager.getSpecific<ctp::CTPRunScalers>("CTP/Calib/Scalers", repository::DatabaseInterface::Timestamp::Latest, metadata);
+    ctpscalers->convertRawToO2();
+    std::cout << "Before updateScalers()" << std::endl;
+    fetcher.updateScalers(*ctpscalers);
+    std::cout << "After updateScalers()" << std::endl;
+
+    unsigned long timeStart;
+    unsigned long timeEnd;
+    std::tie(timeStart, timeEnd) = ctpscalers->getTimeLimit();
+    std::cout << "After getTimeLimit()" << std::endl;
+    unsigned long timeStep = 30000; // 30 seconds
+
+    //string sourceName = "T0VTX"; // this will be provided by the user
+    string sourceName = "ZNC-hadronic";
+    for (unsigned long timestamp = timeStart; timestamp <= timeEnd; timestamp += timeStep) {
+      auto rate = fetcher.fetchNoPuCorr(&ccdbManager, timestamp, runNumber, sourceName);
+      std::cout << "Run " << runNumber << " timestamp " << timestamp << " source " << sourceName << " rate " << rate << std::endl;
+    }
   }
 
   // load and initialize the input groups

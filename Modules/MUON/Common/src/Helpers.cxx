@@ -14,6 +14,7 @@
 #include <TAxis.h>
 #include <TH1.h>
 #include <TList.h>
+#include <TPolyLine.h>
 #include <regex>
 #include "QualityControl/ObjectsManager.h"
 
@@ -130,6 +131,38 @@ TLine* addVerticalLine(TH1& histo, double x,
   line->SetLineWidth(lineWidth);
   histo.GetListOfFunctions()->Add(line);
   return line;
+}
+
+/// Add a marker to an histogram at a given position
+/// The marker is draw with a TPolyLine such that it scales nicely with the size of the pad
+/// The default dimensions of the marker are
+/// * horizontal: 1/20 of the X-axis range
+/// * vertical: 1/10 of the histogram values range
+/// Parameters:
+/// * histo: the histogram to which the marker is associated
+/// * x0, y0: coordinates of the tip of the marker
+/// * color: ROOT index of the marker fill color
+/// * markerSize: overall scaling factor for the marker dimensions
+/// * logx, logy: wether the X or Y axis are in logarithmic scale
+TPolyLine* _addMarker(TH1& histo, double x, double y, int markerColor, float markerSize, bool logx, bool logy)
+{
+  double x0 = x;
+  double y0 = y;
+  double xmin = logx ? std::log10(histo.GetXaxis()->GetXmin()) : histo.GetXaxis()->GetXmin();
+  double xmax = logx ? std::log10(histo.GetXaxis()->GetXmax()) : histo.GetXaxis()->GetXmax();
+  double xSize = (xmax - xmin) / 20;
+  double ySize = (histo.GetMaximum() - histo.GetMinimum()) / 10;
+  double x1 = logx ? std::pow(10, std::log10(x0) - xSize * markerSize / 2) : x0 - xSize * markerSize / 2;
+  double x2 = logx ? std::pow(10, std::log10(x0) + xSize * markerSize / 2) : x0 + xSize * markerSize / 2;
+  double xMarker[4] = { x0, x1, x2, x0 };
+  double yMarker[4] = { y0, y0 + ySize * markerSize, y0 + ySize * markerSize, y0 };
+  auto* m = new TPolyLine(4, xMarker, yMarker);
+  m->SetNDC(kFALSE);
+  m->SetFillColor(markerColor);
+  m->SetOption("f");
+  m->SetLineWidth(0);
+  histo.GetListOfFunctions()->Add(m);
+  return m;
 }
 
 // remove all elements of class c

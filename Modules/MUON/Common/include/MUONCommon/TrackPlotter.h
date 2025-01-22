@@ -110,6 +110,8 @@ class TrackPlotter : public HistPlotter
   uint32_t mFirstTForbit{ 0 };
   int mNOrbitsPerTF{ -1 };
 
+  double mBzMFT{ 0 };
+
   std::vector<std::pair<MuonTrack, bool>> mMuonTracks;
 
   std::vector<MuonCutFunc> mMuonCuts;
@@ -126,6 +128,7 @@ class TrackPlotter : public HistPlotter
   std::array<std::unique_ptr<TH1DRatio>, 3> mTrackEta;    ///< eta of the track
   std::array<std::unique_ptr<TH1DRatio>, 3> mTrackPhi;    ///< phi (in degrees) of the track
   std::array<std::unique_ptr<TH1DRatio>, 3> mTrackPt;     ///< Pt (Gev/c) of the track
+  std::array<std::unique_ptr<TH1DRatio>, 3> mTrackP;      ///< |P| (Gev/c) of the track
   std::unique_ptr<TH1DRatio> mTrackQOverPt;               ///< Q / Pt of the track
   std::array<std::unique_ptr<TH2DRatio>, 3> mTrackEtaPhi; ///< phi (in degrees) vs. eta of the track
   std::array<std::unique_ptr<TH2DRatio>, 3> mTrackEtaPt;  ///< Pt (Gev/c) vs. eta of the track
@@ -139,15 +142,34 @@ class TrackPlotter : public HistPlotter
   std::array<std::unique_ptr<TH2DRatio>, 3> mTrackEtaPtGlobal;  ///< Pt (Gev/c) vs. eta of the track
   std::array<std::unique_ptr<TH2DRatio>, 3> mTrackPhiPtGlobal;  ///< Pt (Gev/c) vs. phi (in degrees) of the track
 
-  std::unique_ptr<TH2DRatio> mTrackPosAtMFT; ///< MCH track poisiton at MFT exit
+  std::unique_ptr<TH2DRatio> mTrackPosAtVertex; ///< MCH track poisiton at MFT exit
+  std::unique_ptr<TH2DRatio> mTrackPosAtAbsorber; ///< MCH track poisiton at MFT exit
+  std::unique_ptr<TH2DRatio> mTrackPosAtMatchingPlaneMCH; ///< MCH track poisiton at MFT-MCH matching plane
+  std::unique_ptr<TH2DRatio> mTrackPosAtMatchingPlaneMFT; ///< MFT track poisiton at MFT-MCH matching plane
   std::unique_ptr<TH2DRatio> mTrackPosAtMID; ///< MCH track poisiton at MID entrance
+
+  std::unique_ptr<TH2D> mSigmaXvsP;
+  std::unique_ptr<TH2D> mSigmaYvsP;
 
   std::unique_ptr<TH1D> mMatchChi2MCHMID;
 
   // plots specific to MFT-MCH(-MID) matched tracks
   std::unique_ptr<TH1D> mMatchNMFTCandidates;
+  std::unique_ptr<TH2F> mMatchNMFTCandidatesVsROFSize;
   std::unique_ptr<TH1D> mMatchScoreMFTMCH;
   std::unique_ptr<TH1D> mMatchChi2MFTMCH;
+
+  std::unique_ptr<TH1D> mMatchDRMFTMCH;
+  std::unique_ptr<TH1D> mMatchDPhiMFTMCH;
+  std::unique_ptr<TH1D> mMatchDXMFTMCH;
+  std::unique_ptr<TH1D> mMatchDYMFTMCH;
+
+  std::unique_ptr<TH2F> mMatchDXMFTMCHVsX;
+  std::unique_ptr<TH2F> mMatchDXMFTMCHVsY;
+  std::unique_ptr<TH2F> mMatchDYMFTMCHVsX;
+  std::unique_ptr<TH2F> mMatchDYMFTMCHVsY;
+  std::unique_ptr<TH2F> mMatchDPhiMFTMCHVsPhi;
+
   std::array<std::unique_ptr<TH2DRatio>, 3> mTrackEtaCorr;   ///< correlation between MCH and global track parameters - eta
   std::array<std::unique_ptr<TH2DRatio>, 3> mTrackDEtaVsEta; ///< deviation between MCH and global track parameters - eta
   std::array<std::unique_ptr<TH2DRatio>, 3> mTrackPhiCorr;   ///< correlation between MCH and global track parameters - phi

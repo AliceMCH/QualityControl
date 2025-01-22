@@ -28,6 +28,11 @@
 #include <string>
 #include <map>
 
+namespace o2::ctp
+{
+  class CTPRateFetcher;
+}
+
 namespace o2::quality_control_modules::common
 {
 
@@ -61,6 +66,7 @@ class ReferenceComparatorTask : public quality_control::postprocessing::PostProc
 
  private:
   size_t mReferenceRun{ 0 };
+  std::map<double, size_t> mReferenceRunForRate;
   int mNotOlderThan{ 120 };
   bool mIgnorePeriodForReference{ true }; /// whether to specify the period name in the reference run query
   bool mIgnorePassForReference{ true };   /// whether to specify the pass name in the reference run query
@@ -73,6 +79,9 @@ class ReferenceComparatorTask : public quality_control::postprocessing::PostProc
   std::map<std::string, std::shared_ptr<o2::quality_control::core::MonitorObject>> mReferencePlots;
   /// \brief histograms with comparison to reference
   std::map<std::string, std::shared_ptr<ReferenceComparatorPlot>> mHistograms;
+
+  std::shared_ptr<o2::ctp::CTPRateFetcher> mReferenceRateFetcher;
+  std::shared_ptr<o2::ctp::CTPRateFetcher> mRateFetcher;
 };
 
 } // namespace o2::quality_control_modules::common

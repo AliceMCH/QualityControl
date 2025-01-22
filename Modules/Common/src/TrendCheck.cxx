@@ -20,12 +20,18 @@
 #include "QualityControl/Quality.h"
 #include "QualityControl/QcInfoLogger.h"
 #include <CommonUtils/StringUtils.h>
+#include <Framework/DefaultsHelpers.h>
+#include "DataFormatsCTP/CTPRateFetcher.h"
 #include <TMath.h>
 #include <TGraph.h>
 #include <TH1.h>
 #include <TCanvas.h>
 #include <TPolyLine.h>
 #include <TPaveText.h>
+
+#include <numeric>
+
+using namespace o2::framework;
 
 namespace o2::quality_control_modules::common
 {
@@ -34,9 +40,89 @@ void TrendCheck::configure()
 {
 }
 
+void TrendCheck::updateScalers(uint64_t timestamp)
+{
+  // retrieve the scalers object only once if mScalerUpdateIntervalMs=0
+  if (mScalerUpdateIntervalMs == 0 && mScalers) {
+    return;
+  }
+
+  // check time elapsed since the last update, do not update if smaller than mScalerUpdateIntervalMs
+  auto t1 = (timestamp > mLastScalerUpdateTimestamp) ? mLastScalerUpdateTimestamp : timestamp;
+  auto t2 = (timestamp > mLastScalerUpdateTimestamp) ? timestamp : mLastScalerUpdateTimestamp;
+  auto elapsed = t2 - t1;
+  if (elapsed < mScalerUpdateIntervalMs) {
+    return;
+  }
+
+  // set database URL
+  auto& ccdbManager = o2::ccdb::BasicCCDBManager::instance();
+  ccdbManager.setURL(mCTPScalerURL);
+
+  auto runNumber = mActivity.mId;
+
+  // retrieve CTP scalers object
+  std::map<string, string> metadata;
+  metadata["runNumber"] = std::to_string(runNumber);
+  mScalers = ccdbManager.getSpecific<ctp::CTPRunScalers>(mCTPScalerPath, timestamp, metadata);
+
+  // update the rate fetcher with the new scalers object
+  if (mScalers) {
+    mRateFetcher->updateScalers(*mScalers);
+    mLastScalerUpdateTimestamp = timestamp;
+  }
+}
+
+/// \brief retrieve the interaction rate for the current run and a given timestamp
+double TrendCheck::getRateForTimestamp(uint64_t timestamp)
+{
+  // update the scalers object of needed
+  updateScalers(timestamp);
+  if (!mScalers) {
+    return 0;
+  }
+
+  auto runNumber = mActivity.mId;
+
+  // get the trigger rate corresponding to the given run and time stamp
+  auto& ccdbManager = o2::ccdb::BasicCCDBManager::instance();
+  auto rate = mRateFetcher->fetchNoPuCorr(&ccdbManager, timestamp, runNumber, mCTPScalerSourceName);
+  ILOG(Info, Support) << "Rate for run " << runNumber << " and timestamp " << timestamp << " and source \"" << mCTPScalerSourceName << "\" is " << rate << " kHz" << ENDM;
+
+  return rate;
+}
+
+/// \brief retrieve the interaction rate using the timestamp taken from the end-of-validity of the MO
+double TrendCheck::getRateForMO(MonitorObject* mo)
+{
+  // get the trigger rate based on the MO's activity and validity
+  if (!mo || mo->getValidity().isInvalid()) {
+    return 0;
+  }
+
+  auto timestamp = mo->getValidity().getMax() - 1;
+
+  return getRateForTimestamp(timestamp);
+}
+
 void TrendCheck::startOfActivity(const Activity& activity)
 {
   mActivity = activity;
+  auto runNumber = activity.mId;
+
+  // initialise (new run)
+  auto& ccdbManager = o2::ccdb::BasicCCDBManager::instance();
+  ccdbManager.setURL(mCTPConfigURL);
+
+  // start and stop time of the run
+  auto rl = ccdbManager.getRunDuration(runNumber);
+  // use the middle of the run as timestamp for accessing CCDB objects
+  auto runTimestamp = std::midpoint(rl.first, rl.second);
+
+  // re-create and re-initialise the rate fetcher object at each new run
+  mRateFetcher.reset();
+  mRateFetcher = std::make_shared<o2::ctp::CTPRateFetcher>();
+  mRateFetcher->setupRun(runNumber, &ccdbManager, runTimestamp, false);
 
   // initialize the thresholds configuration
   mThresholds = std::make_shared<CheckerThresholdsConfig>(mCustomParameters, mActivity);
@@ -174,19 +260,13 @@ static std::optional<std::pair<double, double>> getGraphStatistics(TGraph* graph
   return result;
 }
 
-double TrendCheck::getInteractionRate()
-{
-  return 750000;
-}
-
 /// \brief compute the thresholds for a given graph, taking into account the current interaction rate
 ///
 /// \param key string identifying some plot-specific threshold values
 /// \param graph the graph object to be checked
 /// \return an array of optional (min,max) threshold values for Bad and Medium qualities
-std::array<std::optional<std::pair<double, double>>, 2> TrendCheck::getThresholds(std::string plotName, TGraph* graph)
+std::array<std::optional<std::pair<double, double>>, 2> TrendCheck::getThresholds(std::string plotName, TGraph* graph, double rate)
 {
-  double rate = getInteractionRate();
   std::array<std::optional<std::pair<double, double>>, 2> result = mThresholds->getThresholdsForPlot(plotName, rate);
   if (!result[0]) {
     ILOG(Warning, Support) << "Cannot retrieve thresholds for \"" << plotName << "\"" << ENDM;
@@ -313,11 +393,14 @@ Quality TrendCheck::check(std::map<std::string, std::shared_ptr<MonitorObject>>*
         continue;
       }
 
+      // get the interaction rate corresponding to the validity range of this MO
+      double rate = getRateForMO(mo.get());
+
       // get the value for the last point
       double value = graph->GetPointY(nPoints - 1);
 
       // get acceptable range for the current plot
-      auto thresholds = getThresholds(key, graph);
+      auto thresholds = getThresholds(key, graph, rate);
       // check that at least the thresholds for Bad quality are available
       if (!thresholds[0]) {
         continue;

@@ -149,6 +149,58 @@ int getDEindex(int deId)
   return idx.first + offset;
 }
 
+int getDEFromIndex(int index)
+{
+  int deId = 0;
+  for (int chamber = 9; chamber >= 0; chamber--) {
+    int offset = getChamberOffset(chamber);
+    if (offset > index) {
+      continue;
+    }
+
+    int indexInChamber = index - offset;
+
+    int nDE = getNumDEinChamber(chamber);
+    if (nDE == 0) {
+      return 0;
+    }
+    // number of detectors in one half chamber
+    int nDEhc = nDE / 2;
+
+    // minimum and maximum detector indexes for the L side
+    int lMin = (nDEhc + 1) / 2;
+    int lMax = lMin + nDEhc - 1;
+    if (indexInChamber < nDEhc) {
+      // detector on the L side, simply add lMin
+      //std::cout << "DE on L side, indexInChamber=" << indexInChamber << " nDEhc=" << nDEhc << std::endl;
+      deId = lMin + indexInChamber;
+    } else {
+      // number of detectors in one quarter of chamber
+      //std::cout << "DE on R side, indexInChamber=" << indexInChamber << " nDEhc=" << nDEhc << std::endl;
+      // detector on the R side, compute deId separately above and below middle horizontal axis
+      int indexInHalfChamber = indexInChamber - nDEhc;
+      deId = lMin - indexInHalfChamber - 1;
+      if (deId < 0) {
+        deId = lMax + (nDEhc - indexInHalfChamber);
+      }
+      /*if (indexInHalfChamber > nDEqc) {
+        // the DE is in the lower half of the chamber
+        std::cout << "DE on lower R side, indexInHalfChamber=" << indexInHalfChamber << " nDEqc=" << nDEqc << std::endl;
+        deId = lMax + (nDEhc - indexInHalfChamber);
+      } else {
+        // the DE is in the upper half of the chamber
+        std::cout << "DE on upper R side, indexInHalfChamber=" << indexInHalfChamber << " nDEqc=" << nDEqc << std::endl;
+        deId = lMin - indexInHalfChamber - 1;
+      }*/
+    }
+
+    deId += (chamber + 1) * 100;
+    break;
+  }
+
+  return deId;
+}
+
 //_________________________________________________________________________________________
 
 void getThresholdsPerStation(o2::quality_control::core::CustomParameters customParameters,

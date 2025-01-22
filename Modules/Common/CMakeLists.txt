@@ -50,7 +50,7 @@ target_include_directories(
          $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-target_link_libraries(O2QcCommon PUBLIC O2QualityControl O2::DataFormatsQualityControl PRIVATE ROOT::Graf)
+target_link_libraries(O2QcCommon PUBLIC O2QualityControl O2::DataFormatsQualityControl O2::DataFormatsCTP PRIVATE ROOT::Graf)
 
 install(TARGETS O2QcCommon
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

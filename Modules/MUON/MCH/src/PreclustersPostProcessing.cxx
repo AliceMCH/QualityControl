@@ -26,6 +26,20 @@ using namespace o2::quality_control_modules::muon;
 void PreclustersPostProcessing::configure(const boost::property_tree::ptree& config)
 {
   mConfig = PostProcessingConfigMCH(getID(), config);
+
+  for (int chamber = 0; chamber < 10; chamber++) {
+    int numDEinChamber = getNumDEinChamber(chamber);
+    for (int de = 0; de < numDEinChamber; de++) {
+      int deId = de + (chamber + 1) * 100;
+      int index = getDEindex(deId);
+      int deFromIndex = getDEFromIndex(index);
+      std::cout << "DE ID: " << deId << "  index: " << index << "  DE ID from index: " << deFromIndex << std::endl;
+      if (deFromIndex != deId) {
+        std::cout << "  wrong DE ID!!!" << std::endl;
+        break;
+      }
+    }
+  }
 }
 
 //_________________________________________________________________________________________

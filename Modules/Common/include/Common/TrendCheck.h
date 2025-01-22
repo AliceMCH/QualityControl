@@ -27,6 +27,12 @@
 class TGraph;
 class TObject;
 
+namespace o2::ctp
+{
+  class CTPRateFetcher;
+  class CTPRunScalers;
+}
+
 using namespace o2::quality_control::core;
 
 namespace o2::quality_control_modules::common
@@ -62,9 +68,12 @@ class TrendCheck : public o2::quality_control::checker::CheckInterface
     StdDeviation
   };
 
-  std::array<std::optional<std::pair<double, double>>, 2> getThresholds(std::string key, TGraph* graph);
+  std::array<std::optional<std::pair<double, double>>, 2> getThresholds(std::string key, TGraph* graph, double rate);
   void getGraphsFromObject(TObject* object, std::vector<TGraph*>& graphs);
-  double getInteractionRate();
+
+  void updateScalers(uint64_t timestamp);
+  double getRateForTimestamp(uint64_t timestamp);
+  double getRateForMO(MonitorObject* mo);
 
   Activity mActivity;
   ThresholdsMode mTrendCheckMode{ ExpectedRange };
@@ -76,6 +85,32 @@ class TrendCheck : public o2::quality_control::checker::CheckInterface
   std::unordered_map<std::string, std::vector<std::pair<double, std::pair<double, double>>>> mThresholdsTrendBad;
   std::unordered_map<std::string, std::vector<std::pair<double, std::pair<double, double>>>> mThresholdsTrendMedium;
   std::unordered_map<std::string, Quality> mQualities;
+
+  /// \brief CCDB URL used to initialize the rate fetcher
+  /// FIXME: this should be taken from the global QC configuration key "qc.config.conditionDB.url"?
+  std::string mCTPConfigURL{ "https://alice-ccdb.cern.ch" };
+
+  /// \brief URL and path for accessing the CTP scalers object
+  std::string mCTPScalerURL{ "https://alice-ccdb.cern.ch" };
+  std::string mCTPScalerPath{ "CTP/Calib/Scalers" };
+  // in online we must access the temporary scaler objects in the QCDB
+  //std::string mCTPScalerURL{ "http://ali-qcdb.cern.ch:8083" };
+  //std::string mCTPScalerPath{ "qc/CTP/Scalers" };
+
+  /// \brief trigger source for the collision rate computation
+  /// To be set differently for pp and Pb-Pb
+  std::string mCTPScalerSourceName{ "T0VTX" };
+  //std::string mCTPScalerSourceName{ "ZNC-hadronic" };
+
+  /// \brief minimum interval between updates of the CTP scalers object
+  /// Set to zero to fetch the object only once
+  int mScalerUpdateIntervalMs{ 0 };
+  /// \brief time stamp of the most recent update of the scalers object
+  uint64_t mLastScalerUpdateTimestamp{ 0 };
+
+  /// helper object to fetch the collision rate for a given run number and time stamp
+  std::shared_ptr<o2::ctp::CTPRateFetcher> mRateFetcher;
+  o2::ctp::CTPRunScalers* mScalers{ nullptr };
 };
 
 } // namespace o2::quality_control_modules::common

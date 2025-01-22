@@ -14,9 +14,11 @@
 
 #include "QualityControl/CustomParameters.h"
 #include <gsl/span>
+#include <sstream>
 
 class TH1;
 class TLine;
+class TPolyLine;
 
 namespace o2::quality_control_modules::muon
 {
@@ -55,6 +57,20 @@ TLine* addHorizontalLine(TH1& histo, double y,
 TLine* addVerticalLine(TH1& histo, double x,
                        int lineColor = 1, int lineStyle = 10,
                        int lineWidth = 1);
+
+/// Add a marker to an histogram at a given position
+/// The marker is draw with a TPolyLine such that it scales nicely with the size of the pad
+/// The default dimensions of the marker are
+/// * horizontal: 1/20 of the X-axis range
+/// * vertical: 1/10 of the histogram values range
+/// Parameters:
+/// * histo: the histogram to which the marker is added
+/// * x, y: coordinates of the tip of the marker
+/// * color: ROOT index of the marker fill color
+/// * markerSize: overall scaling factor for the marker dimensions
+/// * logx, logy: wether the X or Y axis are in logarithmic scale
+TPolyLine* _addMarker(TH1& histo, double x, double y, int markerColor, float markerSize, bool logx, bool logy);
+
 void cleanup(TH1& histo, const char* classname);
 void markBunchCrossing(TH1& histo,
                        gsl::span<int> bunchCrossings);

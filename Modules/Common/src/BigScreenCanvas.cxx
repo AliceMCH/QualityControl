@@ -70,13 +70,15 @@ BigScreenCanvas::BigScreenCanvas(std::string name, std::string title, int nRows,
   mColors[Quality::Medium.getName()] = kOrange - 3;
   mColors[Quality::Good.getName()] = kGreen + 2;
 
+  SetFillColor(mBackgroundColor);
+/*
   // TPad filling the whole canvas and used to draw the background color
   mBackgoundPad = std::make_shared<TPad>((name + "_pad").c_str(), (title + "_pad").c_str(), 0, 0, 1, 1);
   mBackgoundPad->SetBorderSize(0);
   mBackgoundPad->SetBorderMode(0);
   mBackgoundPad->SetMargin(0, 0, 0, 0);
   mBackgoundPad->SetFillColor(mBackgroundColor);
-  mBackgoundPad->Draw();
+  mBackgoundPad->Draw();*/
 }
 
 void BigScreenCanvas::addBox(std::string boxName, int index)
@@ -106,9 +108,11 @@ void BigScreenCanvas::setQuality(std::string boxName, Quality quality)
 
 void BigScreenCanvas::update()
 {
-  mBackgoundPad->Clear();
-  mBackgoundPad->Divide(mNCols, mNRows, 0, 0);
-
+//  Clear();
+//  Divide(mNCols, mNRows, 0, 0);
+  //mBackgoundPad->Clear();
+  //mBackgoundPad->Divide(mNCols, mNRows, 0, 0);
+/*
   // set the sub-pads as fully transparent to show the color of the main backgound pad
   for (int padIndex = 1; padIndex <= (mNCols * mNRows); padIndex++) {
     mBackgoundPad->cd(padIndex);
@@ -116,8 +120,10 @@ void BigScreenCanvas::update()
   }
 
   for (auto& [key, box] : mBoxes) {
-    box->DrawInCanvas(mBackgoundPad.get());
+    box->DrawInCanvas(this);
+    //box->DrawInCanvas(mBackgoundPad.get());
   }
+*/
 }
 
 } // namespace o2::quality_control_modules::common

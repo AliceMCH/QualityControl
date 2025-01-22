@@ -53,6 +53,7 @@ int getDEindex(int de);
 constexpr int getNumDE() { return (4 * 4 + 18 * 2 + 26 * 4); }
 int getNumDEinChamber(int chIndex);
 std::pair<int, int> getDEindexInChamber(int deId);
+int getDEFromIndex(int index);
 
 void getThresholdsPerStation(o2::quality_control::core::CustomParameters customParameters,
                              const o2::quality_control::core::Activity& activity,
