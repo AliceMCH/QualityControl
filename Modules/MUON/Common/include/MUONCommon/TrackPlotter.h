@@ -148,6 +148,26 @@ class TrackPlotter : public HistPlotter
   std::unique_ptr<TH2DRatio> mTrackPosAtMatchingPlaneMFT; ///< MFT track poisiton at MFT-MCH matching plane
   std::unique_ptr<TH2DRatio> mTrackPosAtMID; ///< MCH track poisiton at MID entrance
 
+  std::unique_ptr<TH2DRatio> mTrackRPhiAtVertex;   ///< MCH track positon at z=0, polar coordinates
+  std::unique_ptr<TH2DRatio> mTrackRPhiAtAbsorber; ///< MCH track positon at end of absorber, polar coordinates
+  std::unique_ptr<TH2DRatio> mTrackRPhiAtMID;      ///< MCH track positon at MID entrance, polar coordinates
+
+  std::unique_ptr<TH2DRatio> mTrackRVsThetaAtVertex;   ///< MCH track (R, theta) at z=0, polar coordinates
+  std::unique_ptr<TH2DRatio> mTrackRVsThetaAtAbsorber; ///< MCH track (R, theta) at end of absorber, polar coordinates
+  std::unique_ptr<TH2DRatio> mTrackRVsThetaAtMID;      ///< MCH track (R, theta) at MID entrance, polar coordinates
+
+  std::unique_ptr<TH2DRatio> mTrackRVsMomAtVertex;   ///< MCH track (R, p) at z=0, polar coordinates
+  std::unique_ptr<TH2DRatio> mTrackRVsMomAtAbsorber; ///< MCH track (R, p) at end of absorber, polar coordinates
+  std::unique_ptr<TH2DRatio> mTrackRVsMomAtMID;      ///< MCH track (R, p) at MID entrance, polar coordinates
+
+  std::unique_ptr<TH2DRatio> mTrackXSlopeVsPhiAtVertex;   ///< MCH track (xslope, phi) at z=0, polar coordinates
+  std::unique_ptr<TH2DRatio> mTrackXSlopeVsPhiAtAbsorber; ///< MCH track (xslope, phi) at end of absorber, polar coordinates
+  std::unique_ptr<TH2DRatio> mTrackXSlopeVsPhiAtMID;      ///< MCH track (xslope, phi) at MID entrance, polar coordinates
+
+  std::unique_ptr<TH2DRatio> mTrackYSlopeVsPhiAtVertex;   ///< MCH track (yslope, phi) at z=0, polar coordinates
+  std::unique_ptr<TH2DRatio> mTrackYSlopeVsPhiAtAbsorber; ///< MCH track (yslope, phi) at end of absorber, polar coordinates
+  std::unique_ptr<TH2DRatio> mTrackYSlopeVsPhiAtMID;      ///< MCH track (yslope, phi) at MID entrance, polar coordinates
+
   std::unique_ptr<TH2D> mSigmaXvsP;
   std::unique_ptr<TH2D> mSigmaYvsP;
 
@@ -169,6 +189,21 @@ class TrackPlotter : public HistPlotter
   std::unique_ptr<TH2F> mMatchDYMFTMCHVsX;
   std::unique_ptr<TH2F> mMatchDYMFTMCHVsY;
   std::unique_ptr<TH2F> mMatchDPhiMFTMCHVsPhi;
+
+  std::unique_ptr<TH2F> mAbsDXMFTMCHVsX;
+  std::unique_ptr<TH2F> mAbsDXMFTMCHVsY;
+  std::unique_ptr<TH2F> mAbsDYMFTMCHVsX;
+  std::unique_ptr<TH2F> mAbsDYMFTMCHVsY;
+  std::unique_ptr<TH2F> mAbsDPhiMFTMCHVsPhi;
+
+  std::unique_ptr<TH2F> mVertexXVsMatchingXMFT;
+  std::unique_ptr<TH2F> mVertexYVsMatchingXMFT;
+  std::unique_ptr<TH2F> mVertexXVsMatchingYMFT;
+  std::unique_ptr<TH2F> mVertexYVsMatchingYMFT;
+  std::unique_ptr<TH2F> mVertexXVsMatchingXMCH;
+  std::unique_ptr<TH2F> mVertexYVsMatchingXMCH;
+  std::unique_ptr<TH2F> mVertexXVsMatchingYMCH;
+  std::unique_ptr<TH2F> mVertexYVsMatchingYMCH;
 
   std::array<std::unique_ptr<TH2DRatio>, 3> mTrackEtaCorr;   ///< correlation between MCH and global track parameters - eta
   std::array<std::unique_ptr<TH2DRatio>, 3> mTrackDEtaVsEta; ///< deviation between MCH and global track parameters - eta

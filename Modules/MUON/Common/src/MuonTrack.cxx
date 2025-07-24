@@ -560,10 +560,10 @@ void MuonTrack::init()
   mDCAMCH = ::getDCA(mTrackParametersMCH);
   mRAbs = getRAbsMCH(mTrackParametersMCH);
 
-  o2::mch::TrackParam trackParamAtAbs = getTrackParamMCH();
-  extrapToZMCH(trackParamAtAbs, sAbsZEnd);
-  mTrackXAbsMCH = trackParamAtAbs.getNonBendingCoor();
-  mTrackYAbsMCH = trackParamAtAbs.getBendingCoor();
+  mTrackParametersAtAbsMCH = getTrackParamMCH();
+  extrapToZMCH(mTrackParametersAtAbsMCH, sAbsZEnd);
+  mTrackXAbsMCH = mTrackParametersAtAbsMCH.getNonBendingCoor();
+  mTrackYAbsMCH = mTrackParametersAtAbsMCH.getBendingCoor();
   mTrackZAbsMCH = sAbsZEnd;
   /*std::cout << "MCH track at Abs: mom=[" << getTrackMCH()->getPx() << "," << getTrackMCH()->getPy() << "," << getTrackMCH()->getPz() << "]  pos=["
       << getTrackMCH()->getX() << "," << getTrackMCH()->getY() << "," << getTrackMCH()->getZ() << "]  mplane=["
@@ -574,7 +574,6 @@ void MuonTrack::init()
   }*/
 
   o2::mch::TrackParam trackParamAtMFT = getTrackParamMCH();
-  //std::cout << "Extrapolating MCH track from Z=" << getTrackParamMCH().getZ() << " to Z=" << sLastMFTPlaneZ << std::endl;
   if (o2::mch::TrackExtrap::extrapToVertexWithoutBranson(trackParamAtMFT, sLastMFTPlaneZ)) {
     mTrackXMatchMCH = trackParamAtMFT.getNonBendingCoor();
     mTrackYMatchMCH = trackParamAtMFT.getBendingCoor();
@@ -583,7 +582,7 @@ void MuonTrack::init()
     mTrackSigmaYMatchMCH = trackParamAtMFT.getCovariances()(2, 2);
   }
   double R = TMath::Sqrt(mTrackXMatchMCH*mTrackXMatchMCH + mTrackYMatchMCH*mTrackYMatchMCH);
-  if (hasMID() && R > 5 && R < 12 && getTrackMCH()->getP() > 10) {
+  if (false && hasMID() && R > 5 && R < 12 && getTrackMCH()->getP() > 10) {
     std::cout << "MCH track at MFT: mom=" << getTrackMCH()->getP() << "  pos@MFT=["
         << mTrackXMatchMCH << "," << mTrackYMatchMCH << "," << mTrackZMatchMCH << "]" << std::endl;
     for (int i = 0; i < 5; i++) {
@@ -592,8 +591,17 @@ void MuonTrack::init()
     }
   }
 
+  o2::mch::TrackParam trackParamAtOrigin = getTrackParamMCH();
+  if (o2::mch::TrackExtrap::extrapToVertexWithoutBranson(trackParamAtOrigin, 0)) {
+    mTrackXVertexMCH = trackParamAtOrigin.getNonBendingCoor();
+    mTrackYVertexMCH = trackParamAtOrigin.getBendingCoor();
+    mTrackZVertexMCH = 0;
+  }
+
   if (hasMFT()) {
     auto trackMFT = *(getTrackMFT());
+
+    // extrapolation to the MFT-MCH matching plane
     trackMFT.setParameters(getTrackMFT()->getOutParam().getParameters());
     trackMFT.setZ(getTrackMFT()->getOutParam().getZ());
     trackMFT.setCovariances(getTrackMFT()->getOutParam().getCovariances());
@@ -606,6 +614,40 @@ void MuonTrack::init()
     mTrackXMatchMFT = trackMFT.getOutParam().getX();
     mTrackYMatchMFT = trackMFT.getOutParam().getY();
     mTrackZMatchMFT = trackMFT.getOutParam().getZ();
+
+    auto trackMFTAtOrigin = *(getTrackMFT());
+    // extrapolation to the origin
+    trackMFTAtOrigin.setParameters(getTrackMFT()->getParameters());
+    trackMFTAtOrigin.setZ(getTrackMFT()->getZ());
+    trackMFTAtOrigin.setCovariances(getTrackMFT()->getCovariances());
+    trackMFTAtOrigin.setTrackChi2(getTrackMFT()->getTrackChi2());
+    // Extrapolate MFT track parameters and covariances matrix to "sLastMFTPlaneZ"
+    // Parameters: helix track model; Error propagation: Quadratic
+    // If "mBzMFT" is zero: linear track model
+    trackMFTAtOrigin.propagateToZ(0, mBzMFT);
+
+    mTrackXVertexMFT = trackMFTAtOrigin.getX();
+    mTrackYVertexMFT = trackMFTAtOrigin.getY();
+    mTrackZVertexMFT = trackMFTAtOrigin.getZ();
+
+    //std::cout << std::format("MFT extrapolation at matching: {:0.2},{:0.2},{:0.2}\n", mTrackXMatchMFT, mTrackYMatchMFT, mTrackZMatchMFT);
+    //std::cout << std::format("MFT extrapolation at vertex:   {:0.2},{:0.2},{:0.2}\n", mTrackXVertexMFT, mTrackYVertexMFT, mTrackZVertexMFT);
+
+    auto trackMFTAtAbs = *(getTrackMFT());
+
+    // extrapolation to the MFT-MCH matching plane
+    trackMFTAtAbs.setParameters(getTrackMFT()->getOutParam().getParameters());
+    trackMFTAtAbs.setZ(getTrackMFT()->getOutParam().getZ());
+    trackMFTAtAbs.setCovariances(getTrackMFT()->getOutParam().getCovariances());
+    trackMFTAtAbs.setTrackChi2(getTrackMFT()->getOutParam().getTrackChi2());
+    // Extrapolate MFT track parameters and covariances matrix to "sLastMFTPlaneZ"
+    // Parameters: helix track model; Error propagation: Quadratic
+    // If "mBzMFT" is zero: linear track model
+    trackMFTAtAbs.propagateToZ(sAbsZEnd, mBzMFT);
+
+    //mTrackParametersAtAbsMFT = forwardTrackToMCHTrack(trackMFTAtAbs);
+    mTrackParametersAtAbsMFT.setZ(trackMFTAtAbs.getZ());
+    mTrackParametersAtAbsMFT.setParameters(forwardTrackToMCHTrack(trackMFTAtAbs).getParameters());
   }
 
 /*

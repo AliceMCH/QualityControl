@@ -23,7 +23,8 @@
 
 namespace o2::mch
 {
-class Cluster;
+  class Digit;
+  class Cluster;
 } // namespace o2::mch
 
 using namespace o2::quality_control::core;
@@ -53,7 +54,7 @@ class ClustersTask /*final*/ : public TaskInterface
   void createClusterHistos();
 
   /** fill histogram related to each cluster */
-  void fillClusterHistos(gsl::span<const o2::mch::Cluster> clusters);
+  void fillClusterHistos(gsl::span<const o2::mch::Cluster> clusters, gsl::span<const o2::mch::Digit> digits);
 
  private:
   int dsbinx(int deid, int dsid) const;
@@ -63,7 +64,7 @@ class ClustersTask /*final*/ : public TaskInterface
   std::unique_ptr<TProfile> mClusterSizePerChamber; ///< mean cluster size per chamber
   std::unique_ptr<TProfile> mNofClustersPerChamber; ///< mean number of clusters per chamber
   ///< distribution of the cluster size in each station separately
-  std::array<std::unique_ptr<TH1F>, 5> mClusterSizeDistributionPerStation;
+  std::array<std::array<std::unique_ptr<TH1F>, 3>, 5> mClusterSizeDistributionPerStation;
 
   o2::mch::raw::Det2ElecMapper mDet2ElecMapper;
   o2::mch::raw::Solar2FeeLinkMapper mSolar2FeeLinkMapper;

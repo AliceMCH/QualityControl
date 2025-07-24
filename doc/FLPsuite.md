@@ -1368,24 +1368,26 @@ void customize(std::vector<ConfigParamSpec>& workflowOptions)
 
 ## Reference data
 
-A reference object is an object from a previous run. It is usually used as a point of comparison. 
+A reference object is an object from a previous run. It is usually used as a point of comparison.
 
 ### Get a reference plot in a check
 
-To retrieve a reference plot in your Check, use 
+To retrieve a reference plot in your Check, use
+
 ```
   std::shared_ptr<MonitorObject> CheckInterface::retrieveReference(std::string path, Activity referenceActivity);
 ```
-- `path` : the path of the object _without the provenance (e.g. `qc`)_
-- `referenceActivity` : the activity of reference (usually the current activity with a different run number)
+* `path` : the path of the object _without the provenance (e.g. `qc`)_
+* `referenceActivity` : the activity of reference (usually the current activity with a different run number)
 
 If the reference is not found it will return a `nullptr` and the quality is `Null`.
 
 ### Compare to a reference plot
 
-The check `ReferenceComparatorCheck` in `Common` compares objects to their reference. 
+The check `ReferenceComparatorCheck` in `Common` compares objects to their reference.
 
-The configuration looks like 
+The configuration looks like
+
 ```
       "QcCheck": {
         "active": "true",
@@ -1411,28 +1413,30 @@ The configuration looks like
             }
           },
           "PHYSICS": {
-            "PROTON-PROTON": {
+            "pp": {
               "referenceRun" : "551890"
             }
           }
         }
       }
 ```
+
 The check needs the following parameters
-- `referenceRun` to specify what is the run of reference and retrieve the reference data. 
-- `comparatorName` to decide how to compare, see below for their descriptions.
-- `threshold` to specify the value used to discriminate between good and bad matches between the histograms.
-- `ratioPlotRange` to specify a custom vertical scale for the ratio plot. The vertical values are between 1.0 - range and 1.0 + range.
-- `ignorePeriodForReference`, `ignorePassForReference`: boolean flags specifying wether to ignore the period or pass names of the reference run; needed for comparing runs from different periods and/or reconstruction passes.
+* `referenceRun` to specify what is the run of reference and retrieve the reference data.
+* `comparatorName` to decide how to compare, see below for their descriptions.
+* `threshold` to specify the value used to discriminate between good and bad matches between the histograms.
+* `ratioPlotRange` to specify a custom vertical scale for the ratio plot. The vertical values are between 1.0 - range and 1.0 + range.
+* `ignorePeriodForReference`, `ignorePassForReference`: boolean flags specifying wether to ignore the period or pass names of the reference run; needed for comparing runs from different periods and/or reconstruction passes.
 
 Three comparators are provided:
+
 1. `o2::quality_control_modules::common::ObjectComparatorDeviation`: comparison based on the average relative deviation between the bins of the current and reference histograms; the `threshold` parameter represent in this case the maximum allowed deviation
 2. `o2::quality_control_modules::common::ObjectComparatorChi2`: comparison based on a standard chi2 test between the current and reference histograms; the `threshold` parameter represent in this case the minimum allowed chi2 probability
 3. `o2::quality_control_modules::common::ObjectComparatorKolmogorov`: comparison based on a standard Kolmogorov test between the current and reference histograms; the `threshold` parameter represent in this case the minimum allowed Kolmogorov probability
 
-Note that you can easily specify different reference runs for different run types and beam types. 
+Note that you can easily specify different reference runs for different run types and beam types.
 
-The plot is beautified by the addition of a `TPaveText` containing the quality and the reason for the quality. 
+The plot is beautified by the addition of a `TPaveText` containing the quality and the reason for the quality.
 
 ### Generate a canvas combining both the current and reference ratio histogram
 

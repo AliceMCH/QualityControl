@@ -16,6 +16,7 @@
 ///
 
 #include "MCH/PreclustersTask.h"
+#include "MUONCommon/Helpers.h"
 #include "MCH/Helpers.h"
 #ifdef MCH_HAS_MAPPING_FACTORY
 #include "MCHMappingFactory/CreateSegmentation.h"
@@ -24,12 +25,21 @@
 #include "MCHMappingInterface/Segmentation.h"
 #include "MCHMappingInterface/CathodeSegmentation.h"
 #include <Framework/InputRecord.h>
+#include <Framework/TimingInfo.h>
 #include "QualityControl/QcInfoLogger.h"
+
+#include "MCHContour/Contour.h"
+#include "MCHContour/Vertex.h"
+#include "MCHContour/BBox.h"
+#include "MCHMappingSegContour/CathodeSegmentationContours.h"
 
 using namespace std;
 using namespace o2::mch;
 using namespace o2::mch::raw;
 using namespace o2::quality_control::core;
+using namespace o2::quality_control_modules::muon;
+
+std::ofstream clustersLog{ "preclusters.log" };
 
 namespace o2
 {
@@ -54,6 +64,12 @@ void PreclustersTask::initialize(o2::framework::InitContext& /*ctx*/)
 {
   ILOG(Info, Devel) << "initialize PreclustersTask" << AliceO2::InfoLogger::InfoLogger::endm;
 
+  mDet2ElecMapper = o2::mch::raw::createDet2ElecMapper<o2::mch::raw::ElectronicMapperGenerated>();
+
+  // flags to enable the publication of either 1D and 2D maps of channel pseudo-efficiencies
+  mEnable1DPseudoeffMaps = getConfigurationParameter<bool>(mCustomParameters, "Enable1DPseudoeffMaps", mEnable1DPseudoeffMaps);
+  mEnable2DPseudoeffMaps = getConfigurationParameter<bool>(mCustomParameters, "Enable2DPseudoeffMaps", mEnable2DPseudoeffMaps);
+
   mIsSignalDigit = o2::mch::createDigitFilter(20, true, true);
 
   mHistogramPreclustersPerDE = std::make_unique<TH1DRatio>("PreclustersPerDE", "Number of pre-clusters for each DE", getNumDE(), 0, getNumDE());
@@ -64,9 +80,17 @@ void PreclustersTask::initialize(o2::framework::InitContext& /*ctx*/)
   const uint32_t nElecXbins = NumberOfDualSampas;
 
   // Histograms in electronics coordinates
-  mHistogramPseudoeffElec = std::make_unique<TH2FRatio>("Pseudoeff_Elec", "Pseudoeff", nElecXbins, 0, nElecXbins, 64, 0, 64);
-  mHistogramPseudoeffElec->Sumw2(kFALSE);
-  publishObject(mHistogramPseudoeffElec.get(), "colz", false);
+  if (mEnable1DPseudoeffMaps) {
+    mHistogramPseudoeffPerDualSampa = std::make_unique<TH1DRatio>("PseudoeffPerDualSampa", "Average pseudo-efficiency per dual sampa;DS index;efficiency", o2::mch::NumberOfDualSampas, 0, o2::mch::NumberOfDualSampas, false);
+    mHistogramPseudoeffPerDualSampa->Sumw2(kFALSE);
+    publishObject(mHistogramPseudoeffPerDualSampa.get(), "hist", false);
+  }
+
+  if (mEnable2DPseudoeffMaps) {
+    mHistogramPseudoeffElec = std::make_unique<TH2FRatio>("Pseudoeff_Elec", "Pseudoeff", nElecXbins, 0, nElecXbins, 64, 0, 64);
+    mHistogramPseudoeffElec->Sumw2(kFALSE);
+    publishObject(mHistogramPseudoeffElec.get(), "colz", false);
+  }
 
   //----------------------------------
   // Charge distribution histograms
@@ -77,17 +101,17 @@ void PreclustersTask::initialize(o2::framework::InitContext& /*ctx*/)
   publishObject(mHistogramClusterCharge.get(), "colz", false);
 
   mHistogramClusterChargePerStation[0] = std::make_unique<TH2F>("ClusterCharge/ClusterChargeDistributionB",
-                                                                "Cluster charge distribution (B)",
+                                                                "Pre-cluster charge distribution (B)",
                                                                 256, 0, 256 * 50, 5, 1, 6);
   publishObject(mHistogramClusterChargePerStation[0].get(), "colz", false);
 
   mHistogramClusterChargePerStation[1] = std::make_unique<TH2F>("ClusterCharge/ClusterChargeDistributionNB",
-                                                                "Cluster charge distribution (NB)",
+                                                                "Pre-cluster charge distribution (NB)",
                                                                 256, 0, 256 * 50, 5, 1, 6);
   publishObject(mHistogramClusterChargePerStation[1].get(), "colz", false);
 
   mHistogramClusterChargePerStation[2] = std::make_unique<TH2F>("ClusterCharge/ClusterChargeDistribution",
-                                                                "Cluster charge distribution",
+                                                                "Pre-cluster charge distribution",
                                                                 256, 0, 256 * 50, 5, 1, 6);
   publishObject(mHistogramClusterChargePerStation[2].get(), "colz", false);
 
@@ -97,21 +121,43 @@ void PreclustersTask::initialize(o2::framework::InitContext& /*ctx*/)
     }
   }
 
+  for (int station = 0; station < 5; station++) {
+    mHistogramClusterChargeCorrelation[station] = std::make_unique<TH2F>(TString::Format("ClusterCharge/ClusterChargeCorrelation_ST%d", station + 1),
+                                                                         TString::Format("Pre-cluster charge B vs NB (ST%d);charge NB (ADC);charge B (ADC)", station + 1),
+                                                                         200, 0, 20000, 200, 0, 20000);
+    publishObject(mHistogramClusterChargeCorrelation[station].get(), "colz", false);
+    mHistogramClusterChargeAsymmetry[station] = std::make_unique<TH2F>(TString::Format("ClusterCharge/ClusterChargeAsymmetry_ST%d", station + 1),
+                                                                       TString::Format("Pre-cluster charge asymmetry vs charge (ST%d);#sqrt{NB*B} (ADC);1/2*ln(NB/B)", station + 1),
+                                                                       200, 0, 20000, 200, -1, 1);
+    publishObject(mHistogramClusterChargeAsymmetry[station].get(), "colz", false);
+
+    mHistogramLastSampleVsChargeAsymmetry[station][0] = std::make_unique<TH2F>(TString::Format("ClusterCharge/LastSampleVsChargeAsymmetry_ST%d_B", station + 1),
+        TString::Format("Last sample vs charge asymmetry (ST%d B);1/2*ln(NB/B); ADC", station + 1),
+        200, -1, 1, 200, -50, 950);
+    publishObject(mHistogramLastSampleVsChargeAsymmetry[station][0].get(), "colz", false);
+
+    mHistogramLastSampleVsChargeAsymmetry[station][1] = std::make_unique<TH2F>(TString::Format("ClusterCharge/LastSampleVsChargeAsymmetry_ST%d_NB", station + 1),
+        TString::Format("Last sample vs charge asymmetry (ST%d NB);1/2*ln(NB/B); ADC", station + 1),
+        200, -1, 1, 200, -50, 950);
+    publishObject(mHistogramLastSampleVsChargeAsymmetry[station][1].get(), "colz", false);
+ }
+
+
   mHistogramClusterSize = std::make_unique<TH2F>("ClusterSizeHist", "Cluster Size", getNumDE() * 3, 0, getNumDE() * 3, 100, 0, 100);
   publishObject(mHistogramClusterSize.get(), "colz", false);
 
   mHistogramClusterSizePerStation[0] = std::make_unique<TH2F>("ClusterSize/ClusterSizeDistributionB",
-                                                              "Cluster size distribution (B)",
+                                                              "Pre-cluster size distribution (B)",
                                                               50, 0, 50, 5, 1, 6);
   publishObject(mHistogramClusterSizePerStation[0].get(), "colz", false);
 
   mHistogramClusterSizePerStation[1] = std::make_unique<TH2F>("ClusterSize/ClusterSizeDistributionNB",
-                                                              "Cluster size distribution (NB)",
+                                                              "Pre-cluster size distribution (NB)",
                                                               50, 0, 50, 5, 1, 6);
   publishObject(mHistogramClusterSizePerStation[1].get(), "colz", false);
 
   mHistogramClusterSizePerStation[2] = std::make_unique<TH2F>("ClusterSize/ClusterSizeDistribution",
-                                                              "Cluster size distribution",
+                                                              "Pre-cluster size distribution",
                                                               50, 0, 50, 5, 1, 6);
   publishObject(mHistogramClusterSizePerStation[2].get(), "colz", false);
 
@@ -155,6 +201,10 @@ void PreclustersTask::monitorData(o2::framework::ProcessingContext& ctx)
   auto digits = ctx.inputs().get<gsl::span<o2::mch::Digit>>("preclusterdigits");
 
   ILOG(Info, Devel) << fmt::format("Received {} pre-clusters and {} digits", preClusters.size(), digits.size()) << AliceO2::InfoLogger::InfoLogger::endm;
+
+  const auto& tinfo = ctx.services().get<o2::framework::TimingInfo>();
+  auto firstTForbit = tinfo.firstTForbit;
+  std::cout << "First TF orbit: " << firstTForbit << std::endl;
 
   updateTFcount(mHistogramPreclustersPerDE->getDen());
   updateTFcount(mHistogramPreclustersSignalPerDE->getDen());
@@ -261,13 +311,42 @@ static void getFecChannel(int deId, int padId, int& fecId, int& channel)
 
 void PreclustersTask::plotPrecluster(const o2::mch::PreCluster& preCluster, gsl::span<const o2::mch::Digit> digits)
 {
+  // get the digits of this precluster
+  auto preClusterDigits = digits.subspan(preCluster.firstDigit, preCluster.nDigits);
+
+  if (preClusterDigits.empty()) {
+    return;
+  }
+
+  {
+    auto deId = preClusterDigits.front().getDetID();
+    if (deId == 301) {
+      bool skip = true;
+      for (const o2::mch::Digit& digit : preClusterDigits) {
+        auto deId = digit.getDetID();
+        const o2::mch::mapping::Segmentation& segment = o2::mch::mapping::segmentation(deId);
+        int dsId = segment.padDualSampaId(digit.getPadID());
+        if (dsId >= 99 && dsId <= 103) {
+          skip = false;
+          break;
+        }
+      }
+
+      if (!skip) {
+        // compute center-of-gravity of the charge distribution
+        double Xcog, Ycog;
+        bool isWide[2];
+        CoG(preClusterDigits, Xcog, Ycog, isWide);
+
+        clustersLog << std::format("DE{} {},{}  POS={:0.6},{:0.6}\n", deId, preCluster.firstDigit, preCluster.nDigits, Xcog, Ycog);
+      }
+    }
+  }
+
   // filter out single-pad clusters
   if (preCluster.nDigits < 2) {
     return;
   }
-
-  // get the digits of this precluster
-  auto preClusterDigits = digits.subspan(preCluster.firstDigit, preCluster.nDigits);
 
   // whether a cathode has digits or not
   bool cathode[2] = { false, false };
@@ -327,6 +406,20 @@ void PreclustersTask::plotPrecluster(const o2::mch::PreCluster& preCluster, gsl:
   if (segment.findPadPairByPosition(Xcog, Ycog, padIdB, padIdNB)) {
     getFecChannel(deId, padIdB, fecIdB, channelB);
     getFecChannel(deId, padIdNB, fecIdNB, channelNB);
+
+    /*{
+      const o2::mch::mapping::Segmentation segment = o2::mch::mapping::segmentation(deId);
+      int dsId = segment.padDualSampaId(padIdB);
+      auto dsElecId = mDet2ElecMapper(DsDetId{ deId, dsId });
+      if (dsElecId) {
+        auto solarId = dsElecId->solarId();
+        if (solarId != 203) {
+          return;
+        }
+      }
+    }*/
+  } else {
+    return;
   }
 
   // criteria to define a "good" charge cluster in one cathode:
@@ -337,11 +430,21 @@ void PreclustersTask::plotPrecluster(const o2::mch::PreCluster& preCluster, gsl:
   if (isGoodDen[0]) {
     // good cluster on non-bending side, check if there is data from the bending side as well
     if (fecIdB >= 0 && channelB >= 0) {
-      mHistogramPseudoeffElec->getDen()->Fill(fecIdB, channelB);
+      if (mEnable1DPseudoeffMaps) {
+        mHistogramPseudoeffPerDualSampa->getDen()->Fill(fecIdB);
+      }
+      if (mEnable2DPseudoeffMaps) {
+        mHistogramPseudoeffElec->getDen()->Fill(fecIdB, channelB);
+      }
     }
     if (isGoodNum[0]) { // Check if associated to something on Bending
       if (fecIdB >= 0 && channelB >= 0) {
-        mHistogramPseudoeffElec->getNum()->Fill(fecIdB, channelB);
+        if (mEnable1DPseudoeffMaps) {
+          mHistogramPseudoeffPerDualSampa->getNum()->Fill(fecIdB);
+        }
+        if (mEnable2DPseudoeffMaps) {
+          mHistogramPseudoeffElec->getNum()->Fill(fecIdB, channelB);
+        }
       }
     }
   }
@@ -349,11 +452,21 @@ void PreclustersTask::plotPrecluster(const o2::mch::PreCluster& preCluster, gsl:
   if (isGoodDen[1]) {
     // good cluster on bending side, check if there is data from the non-bending side as well
     if (fecIdNB >= 0 && channelNB >= 0) {
-      mHistogramPseudoeffElec->getDen()->Fill(fecIdNB, channelNB);
+      if (mEnable1DPseudoeffMaps) {
+        mHistogramPseudoeffPerDualSampa->getDen()->Fill(fecIdNB);
+      }
+      if (mEnable2DPseudoeffMaps) {
+        mHistogramPseudoeffElec->getDen()->Fill(fecIdNB, channelNB);
+      }
     }
     if (isGoodNum[1]) { // Check if associated to something on Non-Bending
       if (fecIdNB >= 0 && channelNB >= 0) {
-        mHistogramPseudoeffElec->getNum()->Fill(fecIdNB, channelNB);
+        if (mEnable1DPseudoeffMaps) {
+          mHistogramPseudoeffPerDualSampa->getNum()->Fill(fecIdNB);
+        }
+        if (mEnable2DPseudoeffMaps) {
+          mHistogramPseudoeffElec->getNum()->Fill(fecIdNB, channelNB);
+        }
       }
     }
   }
@@ -389,6 +502,53 @@ void PreclustersTask::plotPrecluster(const o2::mch::PreCluster& preCluster, gsl:
     mHistogramClusterChargePerStation[1]->Fill(chargeSum[1], stationId);
     mHistogramClusterChargePerStation[2]->Fill(chargeTot, stationId);
   }
+
+  if ((hasSignal[0] || hasSignal[1]) && multiplicity[0] > 1 && multiplicity[1] > 1) {
+    mHistogramClusterChargeCorrelation[stationId - 1]->Fill(chargeSum[1], chargeSum[0]);
+    double sqrtCharge = std::sqrt(chargeSum[0] * chargeSum[1]);
+    double chargeAsym = 0.5 * std::log(chargeSum[1] / chargeSum[0]);
+    mHistogramClusterChargeAsymmetry[stationId - 1]->Fill(std::sqrt(chargeSum[0] * chargeSum[1]), 0.5 * std::log(chargeSum[1] / chargeSum[0]));
+
+    int32_t minSample = 0xFFF;
+    for (const o2::mch::Digit& digit : preClusterDigits) {
+      int padId = digit.getPadID();
+      int cid = segment.isBendingPad(padId) ? 0 : 1;
+      mHistogramLastSampleVsChargeAsymmetry[stationId - 1][cid]->Fill(chargeAsym, digit.getLastSample());
+      minSample = (minSample <= digit.getLastSample()) ? minSample : digit.getLastSample();
+    }
+
+    //if (stationId > 2 && sqrtCharge > 500 && chargeAsym > 0.2 && multiplicity[0] == 2 && multiplicity[1] > 2) {
+    if (stationId > 2 && minSample < -10) {
+
+      // skip a fiducial border around the active area, so that only fully-contained clusters are considered
+      const o2::mch::mapping::CathodeSegmentation& csegment = segment.bending();
+      o2::mch::contour::Contour<double> envelop = o2::mch::mapping::getEnvelop(csegment);
+      std::vector<o2::mch::contour::Vertex<double>> vertices = envelop.getVertices();
+      o2::mch::contour::BBox<double> bbox = o2::mch::mapping::getBBox(csegment);
+      //if(Xcog >= (bbox.xmin() + 2) && Xcog <= (bbox.xmax() - 2) && Ycog >= (bbox.ymin() + 2) && Ycog <= (bbox.ymax() - 2)) {
+
+        std::cout << fmt::format("Asymmetric pre-cluster found in Station {} / DE{}\n", stationId, deId)
+                      << fmt::format("  charge average:   {}\n", sqrtCharge)
+                      << fmt::format("  charge asymmetry: {}\n", chargeAsym)
+                      << fmt::format("  first digit time: {}\n", preClusterDigits[0].getTime())
+                      << fmt::format("  cluster sizes:   B = {}, NB = {}\n", multiplicity[0], multiplicity[1])
+                      << fmt::format("  cluster charges: B = {}, NB = {}\n", chargeSum[0], chargeSum[1]);
+        std::cout << "  bending amplitudes:\n";
+        for (const o2::mch::Digit& digit : preClusterDigits) {
+          int padId = digit.getPadID();
+          int cid = segment.isBendingPad(padId) ? 0 : 1;
+          if (cid == 0) std::cout << fmt::format("    pad {} time {} => {} ADC, first and last samples {} / {}\n", padId, digit.getTime(), digit.getADC(), digit.getFirstSample(), digit.getLastSample());
+        }
+        std::cout << "  non-bending amplitudes:\n";
+        for (const o2::mch::Digit& digit : preClusterDigits) {
+          int padId = digit.getPadID();
+          int cid = segment.isBendingPad(padId) ? 0 : 1;
+          if (cid == 1) std::cout << fmt::format("    pad {} time {} => {} ADC, first and last samples {} / {}\n", padId, digit.getTime(), digit.getADC(), digit.getFirstSample(), digit.getLastSample());
+        }
+        std::cout << std::endl;
+      //}
+    }
+  }
 }
 
 //_________________________________________________________________________________________________
@@ -398,7 +558,12 @@ void PreclustersTask::endOfCycle()
   ILOG(Info, Devel) << "endOfCycle" << AliceO2::InfoLogger::InfoLogger::endm;
 
   // update mergeable ratios
-  mHistogramPseudoeffElec->update();
+  if (mEnable1DPseudoeffMaps) {
+    mHistogramPseudoeffPerDualSampa->update();
+  }
+  if (mEnable2DPseudoeffMaps) {
+    mHistogramPseudoeffElec->update();
+  }
   mHistogramPreclustersPerDE->update();
   mHistogramPreclustersSignalPerDE->update();
 }

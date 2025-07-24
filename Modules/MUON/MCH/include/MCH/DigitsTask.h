@@ -24,13 +24,17 @@
 #include "MCHBase/Digit.h"
 #endif
 #include "MCHDigitFiltering/DigitFilter.h"
+#include "Common/TH1Ratio.h"
 #include "Common/TH2Ratio.h"
+
+#include "MCHRawElecMap/Mapper.h"
 
 class TH1F;
 class TH2F;
 
 using namespace o2::quality_control::core;
 using namespace o2::quality_control_modules::common;
+using namespace o2::mch::raw;
 
 namespace o2
 {
@@ -64,18 +68,31 @@ class DigitsTask /*final*/ : public TaskInterface // todo add back the "final" w
   void updateOrbits();
   void resetOrbits();
 
+  void decodeBuffer(gsl::span<const std::byte> buf);
+  void decodePage(gsl::span<const std::byte> buf);
+
   template <typename T>
   void publishObject(T* histo, std::string drawOption, bool statBox, bool isExpert);
+
+  bool mEnable1DRateMaps{ true };  // whether to publish 1D maps of channel rates
+  bool mEnable2DRateMaps{ false }; // whether to publish 2D maps of channel rates
 
   bool mFullHistos{ false }; // publish extra diagnostics plots
 
   o2::mch::DigitFilter mIsSignalDigit;
 
   uint32_t mNOrbits{ 0 };
+  uint32_t mFirstOrbitInRun{ 0x422D260 };
+
+  Elec2DetMapper mElec2Det{ nullptr }; ///< front-end electronics mapping
 
   // 2D Histograms, using Elec view (where x and y uniquely identify each pad based on its Elec info (fee, link, de)
   std::unique_ptr<TH2FRatio> mHistogramOccupancyElec;       // Occupancy histogram (Elec view)
   std::unique_ptr<TH2FRatio> mHistogramSignalOccupancyElec; // Occupancy histogram (Elec view) for signal-like digits
+
+  // 1D rate histograms using Elec view, where each x bin corresponds to the unique ID of a DualSAMPA board
+  std::unique_ptr<TH1DRatio> mHistogramRatePerDualSampa;
+  std::unique_ptr<TH1DRatio> mHistogramRateSignalPerDualSampa;
 
   std::unique_ptr<TH2F> mHistogramDigitsOrbitElec;
   std::unique_ptr<TH2F> mHistogramDigitsSignalOrbitElec;
@@ -84,6 +101,10 @@ class DigitsTask /*final*/ : public TaskInterface // todo add back the "final" w
   std::unique_ptr<TH2F> mHistogramAmplitudeVsSamples;
 
   std::map<int, std::unique_ptr<TH1F>> mHistogramADCamplitudeDE; // Histogram of ADC distribution per DE
+
+  std::unique_ptr<TH1F> mHistogramDigitsPerTF;
+  std::unique_ptr<TH1F> mHistogramTimeFrameIDs;
+  std::unique_ptr<TH1F> mHistogramFirstTFOrbitBits;
 
   std::vector<TH1*> mAllHistograms;
 };

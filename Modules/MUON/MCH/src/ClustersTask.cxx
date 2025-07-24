@@ -14,6 +14,7 @@
 #include "MCHGlobalMapping/DsIndex.h"
 #include "MUONCommon/HistPlotter.h"
 #include <DataFormatsMCH/ROFRecord.h>
+#include <DataFormatsMCH/Digit.h>
 #include <DataFormatsMCH/Cluster.h>
 #include <DataFormatsMCH/TrackMCH.h>
 #include <DetectorsBase/GeometryManager.h>
@@ -84,10 +85,20 @@ void ClustersTask::createClusterHistos()
   histograms.emplace_back(HistPlotter::HistInfo{ mClusterSizePerChamber.get(), drawOptions, displayHints });
 
   for (int s = 0; s < 5; s++) {
-    mClusterSizeDistributionPerStation[s] = std::make_unique<TH1F>(TString::Format("ClusterSizeDistribution_ST%d", (s + 1)),
-                                                                   TString::Format("Cluster size distribution - ST%d", (s + 1)),
-                                                                   100, 0, 100);
-    histograms.emplace_back(HistPlotter::HistInfo{ mClusterSizeDistributionPerStation[s].get(), drawOptions, displayHints });
+    mClusterSizeDistributionPerStation[s][0] = std::make_unique<TH1F>(TString::Format("ClusterSizeDistribution_ST%d_B", (s + 1)),
+                                                                      TString::Format("Cluster size distribution - ST%d (B)", (s + 1)),
+                                                                      100, 0, 100);
+    histograms.emplace_back(HistPlotter::HistInfo{ mClusterSizeDistributionPerStation[s][0].get(), drawOptions, displayHints });
+
+    mClusterSizeDistributionPerStation[s][1] = std::make_unique<TH1F>(TString::Format("ClusterSizeDistribution_ST%d_NB", (s + 1)),
+                                                                      TString::Format("Cluster size distribution - ST%d (NB)", (s + 1)),
+                                                                      100, 0, 100);
+    histograms.emplace_back(HistPlotter::HistInfo{ mClusterSizeDistributionPerStation[s][1].get(), drawOptions, displayHints });
+
+    mClusterSizeDistributionPerStation[s][2] = std::make_unique<TH1F>(TString::Format("ClusterSizeDistribution_ST%d", (s + 1)),
+                                                                      TString::Format("Cluster size distribution - ST%d", (s + 1)),
+                                                                      100, 0, 100);
+    histograms.emplace_back(HistPlotter::HistInfo{ mClusterSizeDistributionPerStation[s][2].get(), drawOptions, displayHints });
   }
 
   mHistPlotter.publish(getObjectsManager());
@@ -113,7 +124,7 @@ void ClustersTask::startOfCycle()
   ILOG(Debug, Devel) << "startOfCycle" << ENDM;
 }
 
-void ClustersTask::fillClusterHistos(gsl::span<const o2::mch::Cluster> clusters)
+void ClustersTask::fillClusterHistos(gsl::span<const o2::mch::Cluster> clusters, gsl::span<const o2::mch::Digit> digits)
 {
   if (mTransformation.get() == nullptr) {
     // should not happen, but better be safe than sorry
@@ -151,7 +162,18 @@ void ClustersTask::fillClusterHistos(gsl::span<const o2::mch::Cluster> clusters)
     mNofClustersPerChamber->Fill(chamberId + 1, 1.0);
     int stationId = chamberId / 2;
     if (stationId >= 0 && stationId < 5) {
-      mClusterSizeDistributionPerStation[stationId]->Fill(cluster.nDigits);
+      const auto clusterDigits = digits.subspan(cluster.firstDigit, cluster.nDigits);
+      // loop over digits and compute cluster size for each cathode
+      int clusterSize[2] = { 0, 0 };
+      for (const auto& digit : clusterDigits) {
+        int padid = digit.getPadID();
+        // cathode index
+        int cid = seg.isBendingPad(padid) ? 0 : 1;
+        clusterSize[cid] += 1;
+      }
+      mClusterSizeDistributionPerStation[stationId][0]->Fill(clusterSize[0]);
+      mClusterSizeDistributionPerStation[stationId][1]->Fill(clusterSize[1]);
+      mClusterSizeDistributionPerStation[stationId][2]->Fill(cluster.nDigits);
     }
   }
 }
@@ -168,6 +190,10 @@ bool ClustersTask::assertInputs(o2::framework::ProcessingContext& ctx)
   }
   if (!ctx.inputs().isValid("trackclusters")) {
     ILOG(Info, Support) << "no mch track clusters available on input" << ENDM;
+    return false;
+  }
+  if (!ctx.inputs().isValid("clusterdigits")) {
+    ILOG(Info, Support) << "no mch cluster digits available on input" << ENDM;
     return false;
   }
   return true;
@@ -187,13 +213,14 @@ void ClustersTask::monitorData(o2::framework::ProcessingContext& ctx)
   auto tracks = ctx.inputs().get<gsl::span<o2::mch::TrackMCH>>("tracks");
   auto rofs = ctx.inputs().get<gsl::span<o2::mch::ROFRecord>>("trackrofs");
   auto clusters = ctx.inputs().get<gsl::span<o2::mch::Cluster>>("trackclusters");
+  auto digits = ctx.inputs().get<gsl::span<o2::mch::Digit>>("clusterdigits");
 
   decltype(tracks.size()) nok{ 0 };
 
   for (const auto& track : tracks) {
     const auto trackClusters = clusters.subspan(track.getFirstClusterIdx(), track.getNClusters());
     mNofClustersPerTrack->Fill(trackClusters.size());
-    fillClusterHistos(trackClusters);
+    fillClusterHistos(trackClusters, digits);
   }
 }
 

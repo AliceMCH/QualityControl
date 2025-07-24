@@ -393,6 +393,7 @@ void TracksTask::createTrackHistos(const Activity& activity)
       ILOG(Info, Devel) << "Creating plotter for path " << path << ENDM;
       mTrackPlotters[source] = std::make_unique<muon::TrackPlotter>(maxTracksPerTF, etaBins, phiBins, ptBins, source, path, fullHistos);
       mTrackPlotters[source]->publish(getObjectsManager());
+      mTrackPlottersAll.push_back(mTrackPlotters[source].get());
     }
   };
 
@@ -525,20 +526,77 @@ void TracksTask::createTrackHistos(const Activity& activity)
     [diMuonTimeCut](const MuonTrack& t1, const MuonTrack& t2) { return (std::abs(t1.getTime().getTimeStamp() - t2.getTime().getTimeStamp()) < diMuonTimeCut); }
   };
 
-  auto createPlotterWithCuts = [&](GID::Source source, std::string path, std::vector<MuonCutFunc>& cuts) {
+  auto createPlotterWithCuts = [&](std::map<GID::Source, std::unique_ptr<TrackPlotter>>& trackPlotters,
+                                   GID::Source source,
+                                   std::string path,
+                                   std::vector<MuonCutFunc>& cuts) {
     if (mSrc[source] == 1) {
-      ILOG(Info, Devel) << "Creating plotter for path " << path << ENDM;
-      mTrackPlottersWithCuts[source] = std::make_unique<muon::TrackPlotter>(maxTracksPerTF, etaBins, phiBins, ptBins, source, path, fullHistos);
-      mTrackPlottersWithCuts[source]->setMuonCuts(cuts);
-      mTrackPlottersWithCuts[source]->setDiMuonCuts(diMuonCuts);
-      mTrackPlottersWithCuts[source]->publish(getObjectsManager());
+      ILOG(Info, Devel) << "Creating plotter with cuts for path " << path << ENDM;
+      trackPlotters[source] = std::make_unique<muon::TrackPlotter>(maxTracksPerTF, etaBins, phiBins, ptBins, source, path, fullHistos);
+      trackPlotters[source]->setMuonCuts(cuts);
+      trackPlotters[source]->setDiMuonCuts(diMuonCuts);
+      trackPlotters[source]->publish(getObjectsManager());
+      mTrackPlottersAll.push_back(trackPlotters[source].get());
+      ILOG(Info, Devel) << "Plotter with cuts for path " << path << " created" << ENDM;
     }
   };
 
-  createPlotterWithCuts(GID::Source::MCH, "WithCuts/", muonCuts);
-  createPlotterWithCuts(GID::Source::MCHMID, "MCH-MID/WithCuts/", muonCuts);
-  createPlotterWithCuts(GID::Source::MFTMCH, "MFT-MCH/WithCuts/", muonCuts);
-  createPlotterWithCuts(GID::Source::MFTMCHMID, "MFT-MCH-MID/WithCuts/", muonCuts);
+  createPlotterWithCuts(mTrackPlottersWithCuts, GID::Source::MCH, "WithCuts/", muonCuts);
+  createPlotterWithCuts(mTrackPlottersWithCuts, GID::Source::MCHMID, "MCH-MID/WithCuts/", muonCuts);
+  createPlotterWithCuts(mTrackPlottersWithCuts, GID::Source::MFTMCH, "MFT-MCH/WithCuts/", muonCuts);
+  createPlotterWithCuts(mTrackPlottersWithCuts, GID::Source::MFTMCHMID, "MFT-MCH-MID/WithCuts/", muonCuts);
+
+  std::vector<MuonCutFunc> muonFT0OrACuts {
+    [&](const MuonTrack& track) {
+      if (track.getIR().bc >= 250 && track.getIR().bc <= 355) return true;
+      return false;
+    }
+  };
+  createPlotterWithCuts(mTrackPlottersWithBgdFT0OrA, GID::Source::MCH, "WithBgdFT0OrA/", muonFT0OrACuts);
+  createPlotterWithCuts(mTrackPlottersWithBgdFT0OrA, GID::Source::MCHMID, "MCH-MID/WithBgdFT0OrA/", muonFT0OrACuts);
+  createPlotterWithCuts(mTrackPlottersWithBgdFT0OrA, GID::Source::MFTMCH, "MFT-MCH/WithBgdFT0OrA/", muonFT0OrACuts);
+  createPlotterWithCuts(mTrackPlottersWithBgdFT0OrA, GID::Source::MFTMCHMID, "MFT-MCH-MID/WithBgdFT0OrA/", muonFT0OrACuts);
+
+  muonFT0OrACuts.insert(muonFT0OrACuts.end(), muonCuts.begin(), muonCuts.end());
+  createPlotterWithCuts(mTrackPlottersWithCutsAndBgdFT0OrA, GID::Source::MCH, "WithCutsAndBgdFT0OrA/", muonFT0OrACuts);
+  createPlotterWithCuts(mTrackPlottersWithCutsAndBgdFT0OrA, GID::Source::MCHMID, "MCH-MID/WithCutsAndBgdFT0OrA/", muonFT0OrACuts);
+  createPlotterWithCuts(mTrackPlottersWithCutsAndBgdFT0OrA, GID::Source::MFTMCH, "MFT-MCH/WithCutsAndBgdFT0OrA/", muonFT0OrACuts);
+  createPlotterWithCuts(mTrackPlottersWithCutsAndBgdFT0OrA, GID::Source::MFTMCHMID, "MFT-MCH-MID/WithCutsAndBgdFT0OrA/", muonFT0OrACuts);
+
+  std::vector<MuonCutFunc> muonFT0OrCCuts {
+    [&](const MuonTrack& track) {
+      if (track.getIR().bc >= 2120 && track.getIR().bc <= 2155) return true;
+      if (track.getIR().bc >= 2888 && track.getIR().bc < 3006) return true;
+      return false;
+    }
+  };
+  createPlotterWithCuts(mTrackPlottersWithBgdFT0OrC, GID::Source::MCH, "WithBgdFT0OrC/", muonFT0OrCCuts);
+  createPlotterWithCuts(mTrackPlottersWithBgdFT0OrC, GID::Source::MCHMID, "MCH-MID/WithBgdFT0OrC/", muonFT0OrCCuts);
+  createPlotterWithCuts(mTrackPlottersWithBgdFT0OrC, GID::Source::MFTMCH, "MFT-MCH/WithBgdFT0OrC/", muonFT0OrCCuts);
+  createPlotterWithCuts(mTrackPlottersWithBgdFT0OrC, GID::Source::MFTMCHMID, "MFT-MCH-MID/WithBgdFT0OrC/", muonFT0OrCCuts);
+
+  muonFT0OrCCuts.insert(muonFT0OrCCuts.end(), muonCuts.begin(), muonCuts.end());
+  createPlotterWithCuts(mTrackPlottersWithCutsAndBgdFT0OrC, GID::Source::MCH, "WithCutsAndBgdFT0OrC/", muonFT0OrCCuts);
+  createPlotterWithCuts(mTrackPlottersWithCutsAndBgdFT0OrC, GID::Source::MCHMID, "MCH-MID/WithCutsAndBgdFT0OrC/", muonFT0OrCCuts);
+  createPlotterWithCuts(mTrackPlottersWithCutsAndBgdFT0OrC, GID::Source::MFTMCH, "MFT-MCH/WithCutsAndBgdFT0OrC/", muonFT0OrCCuts);
+  createPlotterWithCuts(mTrackPlottersWithCutsAndBgdFT0OrC, GID::Source::MFTMCHMID, "MFT-MCH-MID/WithCutsAndBgdFT0OrC/", muonFT0OrCCuts);
+
+  std::vector<MuonCutFunc> muonNoBgdCuts {
+    [&](const MuonTrack& track) {
+      if (track.getIR().bc > 405 && track.getIR().bc < 2000) return true;
+      return false;
+    }
+  };
+  createPlotterWithCuts(mTrackPlottersNoBgd, GID::Source::MCH, "NoBgd/", muonNoBgdCuts);
+  createPlotterWithCuts(mTrackPlottersNoBgd, GID::Source::MCHMID, "MCH-MID/NoBgd/", muonNoBgdCuts);
+  createPlotterWithCuts(mTrackPlottersNoBgd, GID::Source::MFTMCH, "MFT-MCH/NoBgd/", muonNoBgdCuts);
+  createPlotterWithCuts(mTrackPlottersNoBgd, GID::Source::MFTMCHMID, "MFT-MCH-MID/NoBgd/", muonNoBgdCuts);
+
+  muonNoBgdCuts.insert(muonNoBgdCuts.end(), muonCuts.begin(), muonCuts.end());
+  createPlotterWithCuts(mTrackPlottersWithCutsNoBgd, GID::Source::MCH, "WithCutsNoBgd/", muonNoBgdCuts);
+  createPlotterWithCuts(mTrackPlottersWithCutsNoBgd, GID::Source::MCHMID, "MCH-MID/WithCutsNoBgd/", muonNoBgdCuts);
+  createPlotterWithCuts(mTrackPlottersWithCutsNoBgd, GID::Source::MFTMCH, "MFT-MCH/WithCutsNoBgd/", muonNoBgdCuts);
+  createPlotterWithCuts(mTrackPlottersWithCutsNoBgd, GID::Source::MFTMCHMID, "MFT-MCH-MID/WithCutsNoBgd/", muonNoBgdCuts);
 
   mTrackPlottersBgdZDC[0] = std::make_unique<muon::TrackPlotter>(maxTracksPerTF, etaBins, phiBins, ptBins, GID::Source::MCH, "BgdZDC/", fullHistos);
   mTrackPlottersBgdZDC[0]->setMuonCuts(zdcBdgSelection);
@@ -593,16 +651,21 @@ void TracksTask::createTrackHistos(const Activity& activity)
 void TracksTask::removeTrackHistos()
 {
   ILOG(Debug, Devel) << "Un-publishing objects" << ENDM;
+  for (auto p : mTrackPlottersAll) {
+    p->unpublish(getObjectsManager());
+  }
+  /*
   for (auto& p : mTrackPlotters) {
     p.second->unpublish(getObjectsManager());
   }
   for (auto& p : mTrackPlottersWithCuts) {
     p.second->unpublish(getObjectsManager());
   }
-
+  */
   ILOG(Debug, Devel) << "Destroying objects" << ENDM;
   mTrackPlotters.clear();
   mTrackPlottersWithCuts.clear();
+  mTrackPlottersAll.clear();
 }
 
 void TracksTask::startOfActivity(const Activity& activity)
@@ -703,6 +766,12 @@ void TracksTask::monitorData(o2::framework::ProcessingContext& ctx)
 */
   ILOG(Debug, Devel) << "Debug: Collected data" << ENDM;
 
+  for (auto p : mTrackPlottersAll) {
+    if (p) {
+      p->setFirstTForbit(firstTForbit);
+    }
+  }
+  /*
   for (auto& p : mTrackPlotters) {
     if (p.second) {
       p.second->setFirstTForbit(firstTForbit);
@@ -713,11 +782,27 @@ void TracksTask::monitorData(o2::framework::ProcessingContext& ctx)
       p.second->setFirstTForbit(firstTForbit);
     }
   }
-  for (auto& p : mTrackPlottersBgdZDC) {
-    if (p) {
-      p->setFirstTForbit(firstTForbit);
+  for (auto& p : mTrackPlottersWithBgd) {
+    if (p.second) {
+      p.second->setFirstTForbit(firstTForbit);
     }
   }
+  for (auto& p : mTrackPlottersNoBgd) {
+    if (p.second) {
+      p.second->setFirstTForbit(firstTForbit);
+    }
+  }
+  for (auto& p : mTrackPlottersWithCutsAndBgd) {
+    if (p.second) {
+      p.second->setFirstTForbit(firstTForbit);
+    }
+  }
+  for (auto& p : mTrackPlottersWithCutsNoBgd) {
+    if (p.second) {
+      p.second->setFirstTForbit(firstTForbit);
+    }
+  }
+  */
 
   if (mSrc[GID::MCH] == 1) {
     ILOG(Debug, Devel) << "Debug: MCH requested" << ENDM;
@@ -725,26 +810,12 @@ void TracksTask::monitorData(o2::framework::ProcessingContext& ctx)
       ILOG(Debug, Devel) << "Debug: MCH source loaded" << ENDM;
       mTrackPlotters[GID::MCH]->fillHistograms(mRecoCont);
       mTrackPlottersWithCuts[GID::MCH]->fillHistograms(mRecoCont);
-      for (auto& p : mTrackPlottersBgdZDC) {
-        p->fillHistograms(mRecoCont);
-      }
-      for (const auto& zdcIR : mBackgroundZDC) {
-        int nTracks = 0;
-        for (const auto& track : mTrackPlotters[GID::MCH]->getMuonTracks()) {
-          auto muonIR = track.first.getIRMCH();
-
-          auto diffIR = muonIR.toLong() - zdcIR.toLong() - 31;
-          if (std::abs(diffIR) <= 5) {
-            nTracks += 1;
-          }
-
-          auto diffIR2 = muonIR.toLong() - zdcIR.toLong();
-          if (std::abs(diffIR2) < 100) {
-            mDCAvsBcZDC->Fill(diffIR2, track.first.getDCAMCH());
-          }
-        }
-        mBgdZDCTrackMult->Fill(nTracks);
-      }
+      mTrackPlottersWithBgdFT0OrA[GID::MCH]->fillHistograms(mRecoCont);
+      mTrackPlottersWithBgdFT0OrC[GID::MCH]->fillHistograms(mRecoCont);
+      mTrackPlottersNoBgd[GID::MCH]->fillHistograms(mRecoCont);
+      mTrackPlottersWithCutsAndBgdFT0OrA[GID::MCH]->fillHistograms(mRecoCont);
+      mTrackPlottersWithCutsAndBgdFT0OrC[GID::MCH]->fillHistograms(mRecoCont);
+      mTrackPlottersWithCutsNoBgd[GID::MCH]->fillHistograms(mRecoCont);
     }
   }
   if (mSrc[GID::MCHMID] == 1) {
@@ -753,6 +824,12 @@ void TracksTask::monitorData(o2::framework::ProcessingContext& ctx)
       ILOG(Debug, Devel) << "Debug: MCHMID source loaded" << ENDM;
       mTrackPlotters[GID::MCHMID]->fillHistograms(mRecoCont);
       mTrackPlottersWithCuts[GID::MCHMID]->fillHistograms(mRecoCont);
+      mTrackPlottersWithBgdFT0OrA[GID::MCHMID]->fillHistograms(mRecoCont);
+      mTrackPlottersWithBgdFT0OrC[GID::MCHMID]->fillHistograms(mRecoCont);
+      mTrackPlottersNoBgd[GID::MCHMID]->fillHistograms(mRecoCont);
+      mTrackPlottersWithCutsAndBgdFT0OrA[GID::MCHMID]->fillHistograms(mRecoCont);
+      mTrackPlottersWithCutsAndBgdFT0OrC[GID::MCHMID]->fillHistograms(mRecoCont);
+      mTrackPlottersWithCutsNoBgd[GID::MCHMID]->fillHistograms(mRecoCont);
     }
   }
   if (mSrc[GID::MFTMCH] == 1) {
@@ -760,6 +837,12 @@ void TracksTask::monitorData(o2::framework::ProcessingContext& ctx)
     if (mRecoCont.isTrackSourceLoaded(GID::MFTMCH)) {
       mTrackPlotters[GID::MFTMCH]->fillHistograms(mRecoCont);
       mTrackPlottersWithCuts[GID::MFTMCH]->fillHistograms(mRecoCont);
+      mTrackPlottersWithBgdFT0OrA[GID::MFTMCH]->fillHistograms(mRecoCont);
+      mTrackPlottersWithBgdFT0OrC[GID::MFTMCH]->fillHistograms(mRecoCont);
+      mTrackPlottersNoBgd[GID::MFTMCH]->fillHistograms(mRecoCont);
+      mTrackPlottersWithCutsAndBgdFT0OrA[GID::MFTMCH]->fillHistograms(mRecoCont);
+      mTrackPlottersWithCutsAndBgdFT0OrC[GID::MFTMCH]->fillHistograms(mRecoCont);
+      mTrackPlottersWithCutsNoBgd[GID::MFTMCH]->fillHistograms(mRecoCont);
     }
   }
   if (mSrc[GID::MFTMCHMID] == 1) {
@@ -767,6 +850,12 @@ void TracksTask::monitorData(o2::framework::ProcessingContext& ctx)
     if (mRecoCont.isTrackSourceLoaded(GID::MFTMCH)) {
       mTrackPlotters[GID::MFTMCHMID]->fillHistograms(mRecoCont);
       mTrackPlottersWithCuts[GID::MFTMCHMID]->fillHistograms(mRecoCont);
+      mTrackPlottersWithBgdFT0OrA[GID::MFTMCHMID]->fillHistograms(mRecoCont);
+      mTrackPlottersWithBgdFT0OrC[GID::MFTMCHMID]->fillHistograms(mRecoCont);
+      mTrackPlottersNoBgd[GID::MFTMCHMID]->fillHistograms(mRecoCont);
+      mTrackPlottersWithCutsAndBgdFT0OrA[GID::MFTMCHMID]->fillHistograms(mRecoCont);
+      mTrackPlottersWithCutsAndBgdFT0OrC[GID::MFTMCHMID]->fillHistograms(mRecoCont);
+      mTrackPlottersWithCutsNoBgd[GID::MFTMCHMID]->fillHistograms(mRecoCont);
     }
   }
 }
@@ -774,15 +863,28 @@ void TracksTask::monitorData(o2::framework::ProcessingContext& ctx)
 void TracksTask::endOfCycle()
 {
   ILOG(Debug, Devel) << "endOfCycle" << ENDM;
+  for (auto p : mTrackPlottersAll) {
+    p->endOfCycle();
+  }
+  /*
   for (auto& p : mTrackPlotters) {
     p.second->endOfCycle();
   }
   for (auto& p : mTrackPlottersWithCuts) {
     p.second->endOfCycle();
   }
-  for (auto& p : mTrackPlottersBgdZDC) {
-    p->endOfCycle();
+  for (auto& p : mTrackPlottersWithBgd) {
+    p.second->endOfCycle();
   }
+  for (auto& p : mTrackPlottersNoBgd) {
+    p.second->endOfCycle();
+  }
+  for (auto& p : mTrackPlottersWithCutsAndBgd) {
+    p.second->endOfCycle();
+  }
+  for (auto& p : mTrackPlottersWithCutsNoBgd) {
+    p.second->endOfCycle();
+  }*/
 }
 
 void TracksTask::endOfActivity(const Activity& /*activity*/)
@@ -794,15 +896,28 @@ void TracksTask::endOfActivity(const Activity& /*activity*/)
 void TracksTask::reset()
 {
   ILOG(Debug, Devel) << "reset" << ENDM;
+  for (auto p : mTrackPlottersAll) {
+    p->reset();
+  }
+  /*
   for (auto& p : mTrackPlotters) {
     p.second->reset();
   }
   for (auto& p : mTrackPlottersWithCuts) {
     p.second->reset();
   }
-  for (auto& p : mTrackPlottersBgdZDC) {
-    p->reset();
+  for (auto& p : mTrackPlottersWithBgd) {
+    p.second->reset();
   }
+  for (auto& p : mTrackPlottersNoBgd) {
+    p.second->reset();
+  }
+  for (auto& p : mTrackPlottersWithCutsAndBgd) {
+    p.second->reset();
+  }
+  for (auto& p : mTrackPlottersWithCutsNoBgd) {
+    p.second->reset();
+  }*/
 }
 
 } // namespace o2::quality_control_modules::muon

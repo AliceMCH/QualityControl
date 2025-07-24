@@ -72,10 +72,15 @@ class MuonTrack
   double getYMid() const { return mTrackParametersAtMID.getBendingCoor(); }
   double getZMid() const { return mTrackParametersAtMID.getZ(); }
 
+  /// get the MFT track position at the absorber end
+  double getXAbsMFT() const { return mTrackParametersAtAbsMFT.getNonBendingCoor(); }
+  double getYAbsMFT() const { return mTrackParametersAtAbsMFT.getBendingCoor(); }
+  double getZAbsMFT() const { return mTrackParametersAtAbsMFT.getZ(); }
+
   /// get the MCH track position at the absorber end
-  double getXAbs() const { return mTrackXAbsMCH; }
-  double getYAbs() const { return mTrackYAbsMCH; }
-  double getZAbs() const { return mTrackZAbsMCH; }
+  double getXAbsMCH() const { return mTrackParametersAtAbsMCH.getNonBendingCoor(); }
+  double getYAbsMCH() const { return mTrackParametersAtAbsMCH.getBendingCoor(); }
+  double getZAbsMCH() const { return mTrackParametersAtAbsMCH.getZ(); }
 
   /// get the MCH track position at the matching plane
   double getXMatchMCH() const { return mTrackXMatchMCH; }
@@ -84,10 +89,20 @@ class MuonTrack
   double getSigmaXMatchMCH() const { return mTrackSigmaXMatchMCH; }
   double getSigmaYMatchMCH() const { return mTrackSigmaYMatchMCH; }
 
+  /// get the MCH track position at the vertex
+  double getXVertexMCH() const { return mTrackXVertexMCH; }
+  double getYVertexMCH() const { return mTrackYVertexMCH; }
+  double getZVertexMCH() const { return mTrackZVertexMCH; }
+
   /// get the MFT track position at the matching plane
   double getXMatchMFT() const { return mTrackXMatchMFT; }
   double getYMatchMFT() const { return mTrackYMatchMFT; }
   double getZMatchMFT() const { return mTrackZMatchMFT; }
+
+  /// get the MFT track position at the vertex
+  double getXVertexMFT() const { return mTrackXVertexMFT; }
+  double getYVertexMFT() const { return mTrackYVertexMFT; }
+  double getZVertexMFT() const { return mTrackZVertexMFT; }
 
   const o2::dataformats::MatchInfoFwd& getMatchInfoFwd() const { return mMatchInfoFwd; }
 
@@ -131,6 +146,9 @@ class MuonTrack
   const o2::mch::TrackParam& getTrackParamMFT() const { return mTrackParametersMFT; }
   const o2::mch::TrackParam& getTrackParamMCH() const { return mTrackParametersMCH; }
   const o2::mch::TrackParam& getTrackParamMID() const { return mTrackParametersMID; }
+  const o2::mch::TrackParam& getTrackParamAtMID() const { return mTrackParametersAtMID; }
+  const o2::mch::TrackParam& getTrackParamAtAbsMCH() const { return mTrackParametersAtAbsMCH; }
+  const o2::mch::TrackParam& getTrackParamAtAbsMFT() const { return mTrackParametersAtAbsMFT; }
 
   bool extrapToZMFT(o2::mch::TrackParam& trackParam, float z) const;
   bool extrapToZMCH(o2::mch::TrackParam& trackParam, float z) const;
@@ -159,6 +177,14 @@ class MuonTrack
   o2::mch::TrackParam mTrackParametersMID;
   o2::mch::TrackParam mTrackParametersAtMID;
 
+  // track parameters at the end of the absorber
+  o2::mch::TrackParam mTrackParametersAtAbsMFT;
+  o2::mch::TrackParam mTrackParametersAtAbsMCH;
+
+  // track parameters at the end of the absorber
+  o2::mch::TrackParam mTrackParametersAtMatchingPlaneMFT;
+  o2::mch::TrackParam mTrackParametersAtMatchingPlaneMCH;
+
   ROOT::Math::PxPyPzMVector mMuonMomentum;
   ROOT::Math::PxPyPzMVector mMuonMomentumAtVertex;
   ROOT::Math::PxPyPzMVector mMuonMomentumMCH;
@@ -174,12 +200,20 @@ class MuonTrack
   double mTrackYMatchMCH{ 0 };
   double mTrackZMatchMCH{ 0 };
 
+  double mTrackXVertexMCH{ 0 };
+  double mTrackYVertexMCH{ 0 };
+  double mTrackZVertexMCH{ 0 };
+
   double mTrackSigmaXMatchMCH{ 0 };
   double mTrackSigmaYMatchMCH{ 0 };
 
   double mTrackXMatchMFT{ 0 };
   double mTrackYMatchMFT{ 0 };
   double mTrackZMatchMFT{ 0 };
+
+  double mTrackXVertexMFT{ 0 };
+  double mTrackYVertexMFT{ 0 };
+  double mTrackZVertexMFT{ 0 };
 
   float mDCA{ 0 };
   float mDCAMCH{ 0 };

@@ -54,7 +54,15 @@ class TracksTask /*final*/ : public TaskInterface
  private:
   std::map<GID::Source, std::unique_ptr<TrackPlotter>> mTrackPlotters;
   std::map<GID::Source, std::unique_ptr<TrackPlotter>> mTrackPlottersWithCuts;
+  std::map<GID::Source, std::unique_ptr<TrackPlotter>> mTrackPlottersWithBgdFT0OrA;
+  std::map<GID::Source, std::unique_ptr<TrackPlotter>> mTrackPlottersWithBgdFT0OrC;
+  std::map<GID::Source, std::unique_ptr<TrackPlotter>> mTrackPlottersNoBgd;
+  std::map<GID::Source, std::unique_ptr<TrackPlotter>> mTrackPlottersWithCutsAndBgdFT0OrA;
+  std::map<GID::Source, std::unique_ptr<TrackPlotter>> mTrackPlottersWithCutsAndBgdFT0OrC;
+  std::map<GID::Source, std::unique_ptr<TrackPlotter>> mTrackPlottersWithCutsNoBgd;
   std::array<std::unique_ptr<TrackPlotter>, 8> mTrackPlottersBgdZDC;
+  std::vector<TrackPlotter*> mTrackPlottersAll;
+
   std::shared_ptr<o2::globaltracking::DataRequest> mDataRequest;
   o2::globaltracking::RecoContainer mRecoCont;
   GID::mask_t mSrc = GID::getSourcesMask("MCH-MID");

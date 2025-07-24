@@ -17,6 +17,7 @@
 
 #include "Common/ReferenceComparatorTask.h"
 #include "Common/ReferenceComparatorPlot.h"
+#include "Common/Utils.h"
 #include "QualityControl/ReferenceUtils.h"
 #include "QualityControl/QcInfoLogger.h"
 #include "QualityControl/MonitorObject.h"
@@ -108,10 +109,10 @@ void ReferenceComparatorTask::initialize(quality_control::postprocessing::Trigge
   mHistograms.clear();
 
   auto& qcdb = services.get<repository::DatabaseInterface>();
-  mNotOlderThan = std::stoi(getCustomParameter(mCustomParameters, "notOlderThan", trigger.activity, "120"));
-  mReferenceRun = std::stoi(getCustomParameter(mCustomParameters, "referenceRun", trigger.activity, "0"));
-  mIgnorePeriodForReference = std::stoi(getCustomParameter(mCustomParameters, "ignorePeriodForReference", trigger.activity, "1")) != 0;
-  mIgnorePassForReference = std::stoi(getCustomParameter(mCustomParameters, "ignorePassForReference", trigger.activity, "1")) != 0;
+  mNotOlderThan = getFromExtendedConfig<int>(trigger.activity, mCustomParameters, "notOlderThan", 120);
+  mReferenceRun = getFromExtendedConfig<int>(trigger.activity, mCustomParameters, "referenceRun", 0);
+  mIgnorePeriodForReference = getFromExtendedConfig<bool>(trigger.activity, mCustomParameters, "ignorePeriodForReference", true);
+  mIgnorePassForReference = getFromExtendedConfig<bool>(trigger.activity, mCustomParameters, "ignorePassForReference", true);
 
   ILOG(Info, Devel) << "Reference run set to '" << mReferenceRun << "' for activity " << trigger.activity << ENDM;
 
@@ -194,6 +195,8 @@ void ReferenceComparatorTask::initialize(quality_control::postprocessing::Trigge
       if (!referenceHistogram) {
         continue;
       }
+      std::cout << "Loaded reference plot for object \"" << fullRefPath << "\" and activity " << referenceActivity
+          << " - integral = " << referenceHistogram->Integral() << std::endl;
 
       // store the reference MO
       mReferencePlots[fullPath] = referencePlot;
@@ -202,9 +205,10 @@ void ReferenceComparatorTask::initialize(quality_control::postprocessing::Trigge
       plotVec.push_back(fullPath);
 
       // create and store the plotter object
-      mHistograms[fullPath] = std::make_shared<ReferenceComparatorPlot>(referenceHistogram, fullOutPath,
+      mHistograms[fullPath] = std::make_shared<ReferenceComparatorPlot>(referenceHistogram, mReferenceRun, fullOutPath,
                                                                         group.normalizeReference,
                                                                         group.drawRatioOnly,
+                                                                        group.legendHeight,
                                                                         group.drawOption1D,
                                                                         group.drawOption2D);
       auto* outObject = mHistograms[fullPath]->getMainCanvas();
@@ -214,6 +218,18 @@ void ReferenceComparatorTask::initialize(quality_control::postprocessing::Trigge
       }
     }
   }
+}
+
+//_________________________________________________________________________________________
+
+std::shared_ptr<ReferenceComparatorPlot> ReferenceComparatorTask::getComparatorPlot(std::string plotName)
+{
+  // check if a corresponding output plot was initialized
+  auto iter = mHistograms.find(plotName);
+  if (iter == mHistograms.end()) {
+    return {};
+  }
+  return iter->second;
 }
 
 //_________________________________________________________________________________________
@@ -245,10 +261,7 @@ void ReferenceComparatorTask::update(quality_control::postprocessing::Trigger tr
       }
 
       // update the plot ratios and the histograms with superimposed reference
-      auto referenceMO = mReferencePlots[plotName];
-      TH1* referenceHistogram = dynamic_cast<TH1*>(referenceMO->getObject());
-
-      iter->second->update(histogram, referenceHistogram);
+      iter->second->update(histogram);
     }
   }
 }

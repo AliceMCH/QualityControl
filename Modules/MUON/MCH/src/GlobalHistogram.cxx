@@ -358,10 +358,10 @@ void DetectorHistogram::Set(double padX, double padY, double padSizeX, double pa
     padY *= -1.0;
   }
 
-  int binx_min = mHist.first->GetXaxis()->FindBin(padX - padSizeX / 2 + 0.1);
-  int binx_max = mHist.first->GetXaxis()->FindBin(padX + padSizeX / 2 - 0.1);
-  int biny_min = mHist.first->GetYaxis()->FindBin(padY - padSizeY / 2 + 0.1);
-  int biny_max = mHist.first->GetYaxis()->FindBin(padY + padSizeY / 2 - 0.1);
+  int binx_min = mHist.first->GetXaxis()->FindBin(padX - padSizeX / 2 + 0.0001);
+  int binx_max = mHist.first->GetXaxis()->FindBin(padX + padSizeX / 2 - 0.0001);
+  int biny_min = mHist.first->GetYaxis()->FindBin(padY - padSizeY / 2 + 0.0001);
+  int biny_max = mHist.first->GetYaxis()->FindBin(padY + padSizeY / 2 - 0.0001);
   for (int by = biny_min; by <= biny_max; by++) {
     for (int bx = binx_min; bx <= binx_max; bx++) {
       mHist.first->SetBinContent(bx, by, val);

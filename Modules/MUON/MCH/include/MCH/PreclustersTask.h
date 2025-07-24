@@ -28,6 +28,7 @@
 #endif
 #include "MCHDigitFiltering/DigitFilter.h"
 #include "MCHBase/PreCluster.h"
+#include "MCHRawElecMap/Mapper.h"
 
 using namespace o2::quality_control_modules::common;
 
@@ -64,9 +65,17 @@ class PreclustersTask /*final*/ : public o2::quality_control::core::TaskInterfac
 
   void plotPrecluster(const o2::mch::PreCluster& preCluster, gsl::span<const o2::mch::Digit> digits);
 
+  bool mEnable1DPseudoeffMaps{ true };  // whether to publish 1D maps of channel pseudo-efficiencies
+  bool mEnable2DPseudoeffMaps{ false }; // whether to publish 2D maps of channel pseudo-efficiencies
+
   o2::mch::DigitFilter mIsSignalDigit;
 
+  o2::mch::raw::Det2ElecMapper mDet2ElecMapper;
+
   std::unique_ptr<TH2FRatio> mHistogramPseudoeffElec; // Mergeable object, Occupancy histogram (Elec view)
+
+  // 1D pseudo-efficiency histogram using Elec view, where each x bin corresponds to the unique ID of a DualSAMPA board
+  std::unique_ptr<TH1DRatio> mHistogramPseudoeffPerDualSampa;
 
   std::unique_ptr<TH1DRatio> mHistogramPreclustersPerDE;       // number of pre-clusters per DE and per TF
   std::unique_ptr<TH1DRatio> mHistogramPreclustersSignalPerDE; // number of pre-clusters with signal per DE and per TF
@@ -74,6 +83,10 @@ class PreclustersTask /*final*/ : public o2::quality_control::core::TaskInterfac
   ///< distribution of the cluster charge and size in each station, total and separately for each cathode
   std::array<std::unique_ptr<TH2F>, 3> mHistogramClusterChargePerStation;
   std::array<std::unique_ptr<TH2F>, 3> mHistogramClusterSizePerStation;
+
+  std::array<std::unique_ptr<TH2F>, 5> mHistogramClusterChargeCorrelation;
+  std::array<std::unique_ptr<TH2F>, 5> mHistogramClusterChargeAsymmetry;
+  std::array<std::array<std::unique_ptr<TH2F>, 2>, 5> mHistogramLastSampleVsChargeAsymmetry;
 
   std::unique_ptr<TH2F> mHistogramClusterCharge;
   std::unique_ptr<TH2F> mHistogramClusterSize;

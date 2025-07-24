@@ -55,26 +55,25 @@ enum DetectorQualityFlags {
 
 class BunchCrossingTable
 {
-public:
+ public:
   bool detectorQuality_bit(int bit) const { return true; }
 };
 
 class CollisionTable
 {
-public:
+ public:
   bool detectorQuality_bit(int bit) const { return true; }
 };
 
 template <typename T>
-concept HasDetectorQuality = requires(T a, int bit)
-{
+concept HasDetectorQuality = requires(T a, int bit) {
   //{a.detectorQuality_bit(bit) } -> std::same_as<bool>;
   { a.detectorQuality_bit(bit) } -> std::convertible_to<bool>;
 };
 
 class QualityChecker
 {
-public:
+ public:
   QualityChecker() = default;
   QualityChecker(std::initializer_list<DetectorQualityFlags> bitsTocheck) : mBitsToCheck(bitsTocheck.size())
   {
@@ -83,55 +82,50 @@ public:
 
   QualityChecker(const std::vector<DetectorQualityFlags> bitsTocheck) : mBitsToCheck(bitsTocheck) {}
 
-  //template <class TABLE>
-  //bool checkTable(const TABLE& table)
+  // template <class TABLE>
+  // bool checkTable(const TABLE& table)
   bool checkTable(const HasDetectorQuality auto& table)
   {
     if (mBitsToCheck.empty()) {
-      throw std::out_of_range ("QualityChecker with empty DetectorQualityFlags bits vector");
+      throw std::out_of_range("QualityChecker with empty DetectorQualityFlags bits vector");
     }
 
     for (auto bit : mBitsToCheck) {
       if (table.detectorQuality_bit(bit)) {
-          return false;
-        }
+        return false;
+      }
     }
     return true;
   }
 
-  //template <class TABLE>
-  //bool operator ()(const TABLE& table)
-  bool operator ()(const HasDetectorQuality auto& table)
+  // template <class TABLE>
+  // bool operator ()(const TABLE& table)
+  bool operator()(const HasDetectorQuality auto& table)
   {
     return checkTable(table);
   }
 
-private:
+ private:
   std::vector<DetectorQualityFlags> mBitsToCheck;
 };
 
 class QualitySelectionFactory
 {
-public:
+ public:
   static QualityChecker create(const std::string& label)
   {
     if (label == "CBT") {
-      return {kFT0Bad, kITSBad, kTPCBadTracking, kTPCBadPID};
-    }
-    else if (label == "CBT_hadronPID") {
-      return {kFT0Bad, kITSBad, kTPCBadTracking, kTPCBadPID, kTOFBad};
-    }
-    else if (label == "CBT_electronPID") {
-      return {kFT0Bad, kITSBad, kTPCBadTracking, kTPCBadPID, kTRDBad};
-    }
-    else if (label == "CBT_calo") {
-      return {kFT0Bad, kITSBad, kTPCBadTracking, kTPCBadPID, kEMCBad};
-    }
-    else if (label == "CBT_muon") {
-      return {kFT0Bad, kITSBad, kTPCBadTracking, kMCHBad, kMIDBad};
-    }
-    else if (label == "CBT_muon_glo") {
-      return {kFT0Bad, kITSBad, kTPCBadTracking, kMCHBad, kMFTBad, kMIDBad};
+      return { kFT0Bad, kITSBad, kTPCBadTracking, kTPCBadPID };
+    } else if (label == "CBT_hadronPID") {
+      return { kFT0Bad, kITSBad, kTPCBadTracking, kTPCBadPID, kTOFBad };
+    } else if (label == "CBT_electronPID") {
+      return { kFT0Bad, kITSBad, kTPCBadTracking, kTPCBadPID, kTRDBad };
+    } else if (label == "CBT_calo") {
+      return { kFT0Bad, kITSBad, kTPCBadTracking, kTPCBadPID, kEMCBad };
+    } else if (label == "CBT_muon") {
+      return { kFT0Bad, kITSBad, kTPCBadTracking, kMCHBad, kMIDBad };
+    } else if (label == "CBT_muon_glo") {
+      return { kFT0Bad, kITSBad, kTPCBadTracking, kMCHBad, kMFTBad, kMIDBad };
     }
 
     return {};
@@ -208,7 +202,6 @@ static std::pair<std::shared_ptr<MonitorObject>, bool> getMO(DatabaseInterface& 
   return { qo, true };
 }
 
-
 void DEQualityTask::configure(const boost::property_tree::ptree& config)
 {
   // input plots
@@ -272,7 +265,6 @@ void DEQualityTask::update(Trigger trigger, framework::ServiceRegistryRef servic
       ILOG(Info, Devel) << "Bad detection element DE" << deId << " found in \'" << plotPath << "\'" << ENDM;
     }
   }
-
 
   // check if the list of bad DEs has changed
   bool changed = false;

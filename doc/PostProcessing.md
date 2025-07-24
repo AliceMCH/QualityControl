@@ -489,13 +489,15 @@ This post-processing task draws a given set of plots in comparison with their co
 Currently the source of reference data is specified as a run-type and beam-type specific `referenceRun` number. This will be modified once a centralized way of accessing reference plots will become available in the framework.
 The `notOlderThan` option allows to ignore monitor objects that are older than a given number of seconds. A value of -1 means "no limit".
 The `ignorePeriodForReference` and `ignorePassForReference` boolean parameters control whether the period and/or pass names should be matched or not when querying the reference plots from the database.
-A value of `"1"` (default) means that the reference plots are not required to match the period and/or pass names of the current run, while a value of `"0"` means that the reference plot is retrieved only if the corresponding period and/or pass names match those of the current run.
+A value of `"true"` (default) means that the reference plots are not required to match the period and/or pass names of the current run, while a value of `"false"` means that the reference plot is retrieved only if the corresponding period and/or pass names match those of the current run.
 
 The input MonitorObjects to be processed are logically divided in **dataGroups**. Each group is configured via the following parameters:
+
 * `inputPath`: path in the QCDB where the input objects are located
 * `referencePath` (optional): specifies the path for the reference objects, if not set the `inputPath` is used
 * `outputPath`: path in the QCDB where the output objects are stored
 * `drawRatioOnly`: boolean parameter specifying wether to only draw the ratio plots, or the current/reference comparisons as well
+* `legendHeight`: space reserved for the legend above the histograms, in fractions of the pad height; if the height is set to zero, the legend is not shown
 * `drawOption1D`: the ROOT draw option to be used for the 1-D histograms
 * `drawOption2D`: the ROOT draw option to be used for the 2-D histograms
 
@@ -506,6 +508,7 @@ The `normalizeReference` boolean parameter controls wether the reference histogr
 The checker extracts the current and reference plots from the stored MO, and compares them using external modules, specified via the `moduleName` and `comparatorName` parameters. The `threshold` parameter specifies the value used to discriminate between good and bad matches between the histograms.
 
 Four comparison modules are provided in the framework:
+
 1. `o2::quality_control_modules::common::ObjectComparatorDeviation`: comparison based on the average relative deviation between the bins of the current and reference histograms; the module accepts the following configuration parameters:
     * `threshold`: the maximum allowed average relative deviation between current and reference histograms
     * `rangeX`, `rangeY`: if set, the comparison is restricted to the bins in the specified X and Y ranges; bins outside the ranges are ignored
@@ -539,14 +542,15 @@ The following example specifies a threshold value common to all the plots, and t
 #### Full configuration example
 
 In the example configuration below, the relationship between the input and output histograms is the following:
+
 * `MCH/MO/Tracks/WithCuts/TrackEta` (1-D histogram)
-    * `MCH/MO/RefComp/TracksMCH/WithCuts/TrackEta`
-        * 1-D version, current and reference plots drawn superimposed in the same canvas, with the ratio below
-        * comparison with a chi2 test method
+  * `MCH/MO/RefComp/TracksMCH/WithCuts/TrackEta`
+    * 1-D version, current and reference plots drawn superimposed in the same canvas, with the ratio below
+    * comparison with a chi2 test method
 * `MCH/MO/Tracks/WithCuts/TrackEtaPhi` (2-D histogram)
-    * `MCH/MO/RefComp/TracksMCH/WithCuts/TrackEtaPhi`
-        * 2-D version, ratio between plots drawn on top with the current and reference plots drawn smaller at the bottom
-        * comparison with a chi2 test method (`"comparatorName" : "o2::quality_control_modules::common::ObjectComparatorChi2`)
+  * `MCH/MO/RefComp/TracksMCH/WithCuts/TrackEtaPhi`
+    * 2-D version, ratio between plots drawn on top with the current and reference plots drawn smaller at the bottom
+    * comparison with a chi2 test method (`"comparatorName" : "o2::quality_control_modules::common::ObjectComparatorChi2`)
 
 ```json
 {
@@ -565,8 +569,8 @@ In the example configuration below, the relationship between the input and outpu
             "default": {
               "notOlderThan" : "300",
               "referenceRun" : "551875",
-              "ignorePeriodForReference": "1",
-              "ignorePassForReference": "1"
+              "ignorePeriodForReference": "true",
+              "ignorePassForReference": "true"
             }
           },
           "PHYSICS": {
@@ -583,6 +587,7 @@ In the example configuration below, the relationship between the input and outpu
             "outputPath": "Tracks/WithCuts",
             "normalizeReference": "true",
             "drawRatioOnly": "false",
+            "legendHeight": "0.2",  
             "drawOption1D": "E",
             "drawOption2D": "COL",
             "inputObjects": [
@@ -616,7 +621,8 @@ In the example configuration below, the relationship between the input and outpu
               "comparatorName" : "o2::quality_control_modules::common::ObjectComparatorChi2",
               "threshold" : "0.5",
               "threshold:TrackEta" : "0.2",
-              "rangeX:TrackEta" : "-3.5,-2.5"
+              "rangeX:TrackEta" : "-3.5,-2.5",
+              "ratioPlotRange" : "0.5"
             }
           }
         },
@@ -635,7 +641,6 @@ In the example configuration below, the relationship between the input and outpu
   }
 }
 ```
-
 
 ### The CcdbInspectorTask class
 
